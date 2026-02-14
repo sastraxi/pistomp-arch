@@ -1,0 +1,26 @@
+[Unit]
+Description=MOD Web UI
+Requires=mod-host.service browsepy.service
+After=mod-host.service browsepy.service
+
+[Service]
+User=pistomp
+Environment="LV2_PATH=/home/pistomp/.lv2:/usr/lib/lv2"
+Environment="MOD_DEV_HOST=1"
+Environment="MOD_DEV_HMI=1"
+Environment="MOD_DEVICE_WEBSERVER_PORT=80"
+Environment="MOD_HOST_PORT=5555"
+Environment="MOD_HOST_FEEDBACK_PORT=5556"
+Environment="MOD_LOG=0"
+Environment="MOD_PEDALBOARDS_DIR=/home/pistomp/data/.pedalboards"
+Environment="MOD_USER_FILES_DIR=/home/pistomp/data/user-files"
+Environment="MOD_KEYS_PATH=/home/pistomp/data/keys/"
+Environment="MOD_CLOUD_API=https://api.moddevices.com/v2"
+Environment="MOD_PATCHSTORAGE_PLATFORM_ID=8046"
+Environment="MOD_PATCHSTORAGE_TARGET_ID=8280"
+ExecStart=/usr/bin/authbind --deep /opt/pistomp/venvs/mod-ui/bin/python -m modui
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

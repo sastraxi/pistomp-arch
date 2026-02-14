@@ -1,0 +1,13 @@
+[Unit]
+Description=Serial MIDI (ttymidi)
+Requires=jack.service
+After=jack.service
+
+[Service]
+User=pistomp
+ExecStart=/usr/bin/ttymidi -s /dev/ttyAMA0 -b 38400
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

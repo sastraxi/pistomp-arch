@@ -1,0 +1,22 @@
+# Maintainer: pistomp
+pkgname=amidithru
+pkgver=1.0
+pkgrel=1
+pkgdesc="ALSA MIDI thru connection daemon"
+arch=('aarch64')
+url="https://github.com/BlokasLabs/amidithru"
+license=('GPL2')
+depends=('alsa-lib')
+makedepends=('git')
+source=("git+https://github.com/BlokasLabs/amidithru.git")
+sha256sums=('SKIP')
+
+build() {
+    cd amidithru
+    make
+}
+
+package() {
+    cd amidithru
+    install -Dm755 amidithru "${pkgdir}/usr/bin/amidithru"
+}

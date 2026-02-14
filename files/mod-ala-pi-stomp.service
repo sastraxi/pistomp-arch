@@ -1,0 +1,13 @@
+[Unit]
+Description=pi-stomp application
+Requires=jack.service mod-host.service mod-ui.service
+After=jack.service mod-host.service mod-ui.service
+
+[Service]
+User=pistomp
+ExecStart=/opt/pistomp/venvs/pi-stomp/bin/python /home/pistomp/pi-stomp/modalapistomp.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

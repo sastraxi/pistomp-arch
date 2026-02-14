@@ -1,0 +1,11 @@
+[Unit]
+Description=First Boot Initialization
+After=multi-user.target
+ConditionPathExists=/boot/firstboot.sh
+
+[Service]
+Type=oneshot
+ExecStart=/boot/firstboot.sh
+
+[Install]
+WantedBy=multi-user.target

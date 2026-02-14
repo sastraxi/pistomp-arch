@@ -1,0 +1,7 @@
+alias ps-restart='sudo systemctl restart mod-ala-pi-stomp'
+alias ps-stop='sudo systemctl stop mod-ala-pi-stomp'
+alias ps-run='sudo /opt/pistomp/venvs/pi-stomp/bin/python /home/pistomp/pi-stomp/modalapistomp.py'
+alias ps-journal='sudo journalctl -f -u mod-ala-pi-stomp'
+alias ttymidi-enable='sudo systemctl enable --now ttymidi'
+alias ttymidi-disable='sudo systemctl disable --now ttymidi'
+alias mod-restart='sudo systemctl restart mod-host mod-ui'

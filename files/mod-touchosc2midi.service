@@ -1,0 +1,13 @@
+[Unit]
+Description=TouchOSC to MIDI bridge
+Requires=mod-amidithru.service jack.service
+After=mod-amidithru.service jack.service network-online.target
+
+[Service]
+User=pistomp
+ExecStart=/opt/pistomp/venvs/touchosc2midi/bin/touchosc2midi
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+# Maintainer: pistomp
+pkgname=libfluidsynth2-compat
+pkgver=2.3.4
+pkgrel=1
+pkgdesc="FluidSynth .so.2 compatibility shim for prebuilt LV2 plugins"
+arch=('aarch64')
+url="https://github.com/FluidSynth/fluidsynth"
+license=('LGPL2.1')
+depends=('fluidsynth')
+makedepends=()
+
+# This package creates a .so.2 symlink so that prebuilt LV2 plugins
+# compiled against Bullseye/Bookworm's libfluidsynth.so.2 can load
+# on Arch (which ships libfluidsynth.so.3).
+# The .so.2 → .so.3 ABI break is minor enough that the plugins work.
+
+package() {
+    local libdir="${pkgdir}/usr/lib"
+    mkdir -p "${libdir}"
+
+    # Find the actual .so.3 versioned file
+    local real_lib
+    real_lib=$(readlink -f /usr/lib/libfluidsynth.so.3)
+    local real_name
+    real_name=$(basename "${real_lib}")
+
+    # Create .so.2 symlink pointing to the real .so.3 lib
+    ln -s "${real_name}" "${libdir}/libfluidsynth.so.2"
+}

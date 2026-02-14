@@ -1,0 +1,23 @@
+# Maintainer: pistomp
+pkgname=mod-midi-merger
+pkgver=1.0
+pkgrel=1
+pkgdesc="JACK internal client for merging MIDI ports"
+arch=('aarch64')
+url="https://github.com/micahvdm/mod-midi-merger"
+license=('GPL2')
+depends=('jack2')
+makedepends=('git' 'cmake')
+source=("git+https://github.com/micahvdm/mod-midi-merger.git")
+sha256sums=('SKIP')
+
+build() {
+    cd mod-midi-merger
+    cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build
+}
+
+package() {
+    cd mod-midi-merger
+    DESTDIR="${pkgdir}" cmake --install build
+}

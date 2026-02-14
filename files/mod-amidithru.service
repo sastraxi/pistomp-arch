@@ -1,0 +1,13 @@
+[Unit]
+Description=ALSA MIDI Thru
+Requires=jack.service
+After=jack.service
+
+[Service]
+User=pistomp
+ExecStart=/usr/bin/amidithru touchosc
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

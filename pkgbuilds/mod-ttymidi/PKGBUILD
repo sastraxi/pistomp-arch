@@ -1,0 +1,22 @@
+# Maintainer: pistomp
+pkgname=mod-ttymidi
+pkgver=1.0
+pkgrel=1
+pkgdesc="Serial MIDI interface for MOD platform"
+arch=('aarch64')
+url="https://github.com/moddevices/mod-ttymidi"
+license=('GPL2')
+depends=('jack2' 'alsa-lib')
+makedepends=('git')
+source=("git+https://github.com/moddevices/mod-ttymidi.git")
+sha256sums=('SKIP')
+
+build() {
+    cd mod-ttymidi
+    make
+}
+
+package() {
+    cd mod-ttymidi
+    install -Dm755 ttymidi "${pkgdir}/usr/bin/ttymidi"
+}

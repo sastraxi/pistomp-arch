@@ -1,0 +1,15 @@
+[Unit]
+Description=JACK Audio Connection Kit
+After=sound.target
+
+[Service]
+User=jack
+Environment="LV2_PATH=/home/pistomp/.lv2:/usr/lib/lv2"
+ExecStart=/etc/jackdrc
+LimitRTPRIO=infinity
+LimitMEMLOCK=infinity
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

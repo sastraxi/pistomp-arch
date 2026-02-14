@@ -1,0 +1,35 @@
+# Maintainer: pistomp
+# Based on Arch ARM linux-rpi PKGBUILD with PREEMPT_RT enabled
+#
+# This is a placeholder — the RT kernel build is Phase 6 and requires
+# significant build time (cross-compile recommended).
+#
+# To build:
+#   1. Clone RPi kernel: git clone --depth 1 https://github.com/raspberrypi/linux.git
+#   2. Apply RT patch (or use 6.12+ with built-in PREEMPT_RT)
+#   3. Set CONFIG_PREEMPT_RT=y in .config
+#   4. Build with: makepkg -s
+#   5. Install with: pacman -U linux-rpi-rt-*.pkg.tar.*
+
+pkgname=linux-rpi-rt
+pkgver=6.12.9
+pkgrel=1
+pkgdesc="Raspberry Pi kernel with PREEMPT_RT (realtime)"
+arch=('aarch64')
+url="https://github.com/raspberrypi/linux"
+license=('GPL2')
+depends=('kmod' 'mkinitcpio')
+makedepends=('bc' 'git' 'inetutils')
+provides=('linux' 'linux-rpi')
+conflicts=('linux-rpi')
+options=('!strip')
+
+# TODO: Fill in source and build() when ready for Phase 6
+source=()
+sha256sums=()
+
+build() {
+    echo "RT kernel build not yet implemented — see comments in PKGBUILD"
+    echo "Install stock linux-rpi for now, upgrade to RT kernel later"
+    exit 1
+}

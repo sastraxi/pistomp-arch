@@ -1,0 +1,15 @@
+[Unit]
+Description=JACK MIDI Merger (internal client)
+Requires=jack.service
+After=jack.service
+
+[Service]
+User=pistomp
+ExecStart=/usr/bin/jack_load mod-midi-merger
+ExecStop=/usr/bin/jack_unload mod-midi-merger
+RemainAfterExit=yes
+Type=oneshot
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
