@@ -13,7 +13,7 @@ Supports Raspberry Pi 3, 4, and 5.
 # Output: deploy/pistompOS-arch-<date>.img.zst
 ```
 
-Requires Docker. First run downloads ~500MB of base OS + LV2 plugins into `cache/`.
+Requires Docker with [buildx](https://docs.docker.com/build/buildx/install/). On macOS with Homebrew: `brew install docker-buildx` and add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`. First run downloads ~500MB of base OS + LV2 plugins into `cache/`.
 
 ## What's in the Image
 

@@ -13,7 +13,6 @@ pacman -S --noconfirm --needed \
     openssh \
     rsync \
     htop \
-    authbind \
     python python-pip \
     libgpiod \
     i2c-tools \
@@ -22,7 +21,6 @@ pacman -S --noconfirm --needed \
     iw \
     parted \
     dosfstools \
-    vim \
     wget curl
 
 # ---------- enable services (via symlinks for chroot) ----------
@@ -33,6 +31,15 @@ mkdir -p "${WANTS}"
 ln -sf /usr/lib/systemd/system/NetworkManager.service "${WANTS}/"
 ln -sf /usr/lib/systemd/system/sshd.service "${WANTS}/"
 ln -sf /usr/lib/systemd/system/avahi-daemon.service "${WANTS}/"
+
+# ---------- hardware access (GPIO/SPI/I2C via udev) ----------
+
+# Grant wheel group access to hardware peripherals (Arch has no gpio/spi/i2c groups)
+cat > /etc/udev/rules.d/99-pistomp-hw.rules <<'EOF'
+SUBSYSTEM=="gpio", KERNEL=="gpiochip*", GROUP="wheel", MODE="0660"
+SUBSYSTEM=="spidev", KERNEL=="spidev*", GROUP="wheel", MODE="0660"
+SUBSYSTEM=="i2c-dev", KERNEL=="i2c-[0-9]*", GROUP="wheel", MODE="0660"
+EOF
 
 # ---------- SSH config ----------
 
@@ -55,15 +62,9 @@ dns=dnsmasq
 unmanaged-devices=none
 EOF
 
-# ---------- authbind (allow mod-ui on port 80) ----------
-
-touch /etc/authbind/byport/80
-chmod 500 /etc/authbind/byport/80
-chown "${FIRST_USER}:${FIRST_USER}" /etc/authbind/byport/80
-
 # ---------- bash aliases ----------
 
-install -m 644 /tmp/pistomp-arch/files/bash_aliases "/home/${FIRST_USER}/.bash_aliases"
+install -m 644 /root/pistomp-arch/files/bash_aliases "/home/${FIRST_USER}/.bash_aliases"
 chown "${FIRST_USER}:${FIRST_USER}" "/home/${FIRST_USER}/.bash_aliases"
 
 # Source .bash_aliases from .bashrc if not already

@@ -12,11 +12,12 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 cleanup() {
     log "Cleaning up..."
     # Unmount in reverse order
-    for mp in dev/pts dev/shm dev proc sys tmp; do
+    for mp in root/pistomp-arch/cache dev/pts dev/shm dev proc sys tmp; do
         mountpoint -q "${ROOT_MNT}/${mp}" 2>/dev/null && umount -lf "${ROOT_MNT}/${mp}" || true
     done
     mountpoint -q "${BOOT_MNT}" 2>/dev/null && umount -lf "${BOOT_MNT}" || true
     mountpoint -q "${ROOT_MNT}" 2>/dev/null && umount -lf "${ROOT_MNT}" || true
+    [[ -n "${LOOP_DEV:-}" ]] && kpartx -dv "${LOOP_DEV}" 2>/dev/null || true
     [[ -n "${LOOP_DEV:-}" ]] && losetup -d "${LOOP_DEV}" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -24,8 +25,8 @@ trap cleanup EXIT
 run_in_chroot() {
     local script="$1"
     log "Running ${script} in chroot..."
-    cp "${SCRIPT_DIR}/${script}" "${ROOT_MNT}/tmp/current-script.sh"
-    chmod +x "${ROOT_MNT}/tmp/current-script.sh"
+    cp "${SCRIPT_DIR}/${script}" "${ROOT_MNT}/root/current-script.sh"
+    chmod +x "${ROOT_MNT}/root/current-script.sh"
 
     # Export config vars into chroot environment
     arch-chroot "${ROOT_MNT}" /bin/bash -c "
@@ -46,16 +47,16 @@ run_in_chroot() {
         export USERFILES_BRANCH='${USERFILES_BRANCH}'
         export BROWSEPY_REPO='${BROWSEPY_REPO}'
         export TOUCHOSC2MIDI_REPO='${TOUCHOSC2MIDI_REPO}'
-        /tmp/current-script.sh
+        /root/current-script.sh
     "
-    rm -f "${ROOT_MNT}/tmp/current-script.sh"
+    rm -f "${ROOT_MNT}/root/current-script.sh"
 }
 
 # ---------- preflight ----------
 
 [[ $EUID -eq 0 ]] || die "Must run as root"
 
-for cmd in fallocate parted losetup mkfs.vfat mkfs.ext4 arch-chroot; do
+for cmd in fallocate parted losetup mkfs.vfat mkfs.ext4 arch-chroot kpartx; do
     command -v "$cmd" &>/dev/null || die "Missing required command: $cmd"
 done
 
@@ -94,14 +95,17 @@ parted -s "${IMG_FILE}" mkpart primary fat32 1MiB 513MiB
 parted -s "${IMG_FILE}" set 1 boot on
 parted -s "${IMG_FILE}" mkpart primary ext4 513MiB 100%
 
-# Attach loop device
+# Attach loop device and create partition mappings
 log "Setting up loop device..."
-LOOP_DEV=$(losetup --find --show --partscan "${IMG_FILE}")
-BOOT_PART="${LOOP_DEV}p1"
-ROOT_PART="${LOOP_DEV}p2"
-
-# Wait for partition devices
+LOOP_DEV=$(losetup --find --show "${IMG_FILE}")
+kpartx -av "${LOOP_DEV}"
 sleep 1
+
+# kpartx creates /dev/mapper/loopNp1, /dev/mapper/loopNp2
+LOOP_NAME=$(basename "${LOOP_DEV}")
+BOOT_PART="/dev/mapper/${LOOP_NAME}p1"
+ROOT_PART="/dev/mapper/${LOOP_NAME}p2"
+
 [[ -b "${BOOT_PART}" ]] || die "Boot partition ${BOOT_PART} not found"
 [[ -b "${ROOT_PART}" ]] || die "Root partition ${ROOT_PART} not found"
 
@@ -135,10 +139,13 @@ fi
 
 # Copy project files into chroot
 log "Copying project files into chroot..."
-mkdir -p "${ROOT_MNT}/tmp/pistomp-arch"
-cp -r "${SCRIPT_DIR}/files" "${ROOT_MNT}/tmp/pistomp-arch/"
-cp -r "${SCRIPT_DIR}/pkgbuilds" "${ROOT_MNT}/tmp/pistomp-arch/"
-cp -r "${SCRIPT_DIR}/patches" "${ROOT_MNT}/tmp/pistomp-arch/"
+mkdir -p "${ROOT_MNT}/root/pistomp-arch"
+cp -r "${SCRIPT_DIR}/files" "${ROOT_MNT}/root/pistomp-arch/"
+cp -r "${SCRIPT_DIR}/pkgbuilds" "${ROOT_MNT}/root/pistomp-arch/"
+cp -r "${SCRIPT_DIR}/patches" "${ROOT_MNT}/root/pistomp-arch/"
+# Bind-mount cache to avoid copying large tarballs
+mkdir -p "${ROOT_MNT}/root/pistomp-arch/cache"
+mount --bind "${SCRIPT_DIR}/cache" "${ROOT_MNT}/root/pistomp-arch/cache"
 
 # Mount pseudo-filesystems for chroot
 mount -t proc proc "${ROOT_MNT}/proc"
@@ -147,13 +154,6 @@ mount --bind /dev "${ROOT_MNT}/dev"
 mount --bind /dev/pts "${ROOT_MNT}/dev/pts"
 mount --bind /dev/shm "${ROOT_MNT}/dev/shm"
 mount -t tmpfs tmpfs "${ROOT_MNT}/tmp"
-
-# Re-copy files to tmpfs-mounted /tmp
-mkdir -p "${ROOT_MNT}/tmp/pistomp-arch"
-cp -r "${SCRIPT_DIR}/files" "${ROOT_MNT}/tmp/pistomp-arch/"
-cp -r "${SCRIPT_DIR}/pkgbuilds" "${ROOT_MNT}/tmp/pistomp-arch/"
-cp -r "${SCRIPT_DIR}/patches" "${ROOT_MNT}/tmp/pistomp-arch/"
-cp -r "${SCRIPT_DIR}/cache" "${ROOT_MNT}/tmp/pistomp-arch/"
 
 # ---------- run build scripts ----------
 

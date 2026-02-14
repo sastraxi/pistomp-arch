@@ -31,10 +31,10 @@ EOF
 
 # ---------- JACK config ----------
 
-install -m 644 /tmp/pistomp-arch/files/jackdrc /etc/jackdrc
+install -m 644 /root/pistomp-arch/files/jackdrc /etc/jackdrc
 
 # ---------- ALSA config ----------
 
-install -m 644 /tmp/pistomp-arch/files/alsa-base.conf /etc/modprobe.d/alsa-base.conf
+install -m 644 /root/pistomp-arch/files/alsa-base.conf /etc/modprobe.d/alsa-base.conf
 
 echo "==> 02-audio: Done"

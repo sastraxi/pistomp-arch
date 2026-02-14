@@ -6,9 +6,9 @@ echo "==> 03-pistomp: Application stack"
 PISTOMP_DIR="/opt/pistomp"
 PYENV_ROOT="${PISTOMP_DIR}/pyenv"
 VENV_BASE="${PISTOMP_DIR}/venvs"
-FILES="/tmp/pistomp-arch/files"
-PKGBUILDS="/tmp/pistomp-arch/pkgbuilds"
-PATCHES="/tmp/pistomp-arch/patches"
+FILES="/root/pistomp-arch/files"
+PKGBUILDS="/root/pistomp-arch/pkgbuilds"
+PATCHES="/root/pistomp-arch/patches"
 
 mkdir -p "${PISTOMP_DIR}" "${VENV_BASE}"
 
@@ -140,7 +140,7 @@ git clone --depth 1 -b "${USERFILES_BRANCH}" "${USERFILES_REPO}" \
     "/home/${FIRST_USER}/data/user-files"
 
 # LV2 plugins — must be pre-downloaded in cache/
-LV2_CACHE="/tmp/pistomp-arch/cache/lv2plugins.tar.gz"
+LV2_CACHE="/root/pistomp-arch/cache/lv2plugins.tar.gz"
 [[ -f "${LV2_CACHE}" ]] || { echo "ERROR: LV2 plugins not found at ${LV2_CACHE}. Run ./build-docker.sh first to download." >&2; exit 1; }
 echo "==> Installing LV2 plugins from cache..."
 tar xzf "${LV2_CACHE}" -C "/home/${FIRST_USER}/"

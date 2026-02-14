@@ -21,8 +21,12 @@ fi
 
 # ---------- build docker image ----------
 
-echo "==> Building Docker image..."
-docker build -t pistomp-arch-builder "${SCRIPT_DIR}"
+if [[ "${1:-}" == "--rebuild" ]] || ! docker image inspect pistomp-arch-builder &>/dev/null; then
+    echo "==> Building Docker image..."
+    docker buildx build --load -t pistomp-arch-builder "${SCRIPT_DIR}"
+else
+    echo "==> Using existing Docker image (pass --rebuild to force)"
+fi
 
 # ---------- run build ----------
 

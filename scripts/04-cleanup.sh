@@ -15,7 +15,7 @@ pacman -Scc --noconfirm
 
 # ---------- clear temporary files ----------
 
-rm -rf /tmp/pistomp-arch
+rm -rf /root/pistomp-arch
 rm -rf /tmp/build-*
 rm -rf /tmp/mod-ui
 rm -rf /var/log/journal/*

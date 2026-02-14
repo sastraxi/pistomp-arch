@@ -5,23 +5,32 @@ echo "==> 00-base: Bootstrap system"
 
 # ---------- pacman init ----------
 
+# Disable Landlock sandbox (doesn't work in chroot/Docker)
+sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
+
 pacman-key --init
 pacman-key --populate archlinuxarm
 
-# Full system upgrade
-pacman -Syu --noconfirm
+# Create vconsole.conf early (mkinitcpio needs it during kernel install)
+echo "KEYMAP=${KEYMAP}" > /etc/vconsole.conf
+
+# Remove vim and dependents before upgrade (ALARM ships them, mirror frequently 404s)
+pacman -Rdd --noconfirm gvim vim vim-runtime vi 2>/dev/null || true
+
+# Full system upgrade + sudo
+pacman -Syu --noconfirm --ignore vim,vim-runtime,gvim
+pacman -S --noconfirm --needed sudo
 
 # Replace generic kernel with RPi-specific kernel (supports Pi 3/4/5)
+# Remove conflicting packages first
+pacman -Rdd --noconfirm linux-aarch64 uboot-raspberrypi 2>/dev/null || true
 pacman -S --noconfirm linux-rpi linux-rpi-headers
-# Remove generic kernel if present
-pacman -Rns --noconfirm linux-aarch64 uboot-raspberrypi 2>/dev/null || true
 
 # ---------- locale ----------
 
 sed -i "s/^#${LOCALE}/${LOCALE}/" /etc/locale.gen
 locale-gen
 echo "LANG=${LOCALE}" > /etc/locale.conf
-echo "KEYMAP=${KEYMAP}" > /etc/vconsole.conf
 
 # ---------- timezone ----------
 
@@ -43,7 +52,7 @@ EOF
 echo "root:${FIRST_USER_PASS}" | chpasswd
 
 # Create pistomp user with sudo
-useradd -m -G wheel,audio,video,gpio,spi,i2c -s /bin/bash "${FIRST_USER}"
+useradd -m -G wheel,audio,video -s /bin/bash "${FIRST_USER}"
 echo "${FIRST_USER}:${FIRST_USER_PASS}" | chpasswd
 
 # Enable sudo for wheel group (passwordless for convenience)
@@ -57,7 +66,7 @@ userdel -r alarm 2>/dev/null || true
 
 # ---------- boot config ----------
 
-install -m 644 /tmp/pistomp-arch/files/config.txt /boot/config.txt
+install -m 644 /root/pistomp-arch/files/config.txt /boot/config.txt
 
 # ---------- fstab ----------
 
