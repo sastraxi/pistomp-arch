@@ -28,10 +28,18 @@ rm -rf /tmp/mod-ui
 rm -rf /var/log/journal/*
 rm -rf /var/cache/pacman/pkg/*
 
+# ---------- remove docs, locales, and other unneeded files ----------
+rm -rf /usr/share/doc/*
+rm -rf /usr/share/man/*
+# Keep en_US and C locales, remove all others
+find /usr/share/locale -mindepth 1 -maxdepth 1 -type d ! -name 'en_US' ! -name 'C' -exec rm -rf {} +
+
+
 # ---------- clear Python caches ----------
 
 find /opt/pistomp -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 find /home -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+rm -rf /root/.cache/uv
 
 # ---------- remove qemu (will also be removed by build.sh) ----------
 
