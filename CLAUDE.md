@@ -64,6 +64,16 @@ jack.service
   └─ mod-amidithru.service
 ```
 
+## Troubleshooting with the live device
+
+If we're trying to understand why something doesn't work, sometimes the pi-Stomp v3 hardware will be available to us. We can ssh into it via `ssh pistomp@pistomp.local` and introspect the running environment. We must always use the following ordering:
+
+1. Confirm the runtime crash / bug / deficiency
+2. Root-cause it -- what exactly is broken, and why?
+3. Determine how our build differs from pi-gen-pistomp, if it does (some bugs are in both)
+4. Play around with the running device to get it working
+5. Backport the changes into this repository or to the related `../pi-stomp` or `../mod-ui` repository.
+
 ## Pitfalls (hard-won lessons)
 
 ### JACK permissions
@@ -93,6 +103,10 @@ Arch uses predictable names (`wld0`), but pi-stomp hardcodes `wlan0`. A udev rul
 ## Relationship to pi-gen-pistomp
 
 `../pi-gen-pistomp` is the original Debian-based image builder. This repo is a ground-up Arch rewrite. When in doubt about how a component should be configured, cross-reference pi-gen's `stage2/05-pistomp/` (service files, user setup, native builds) and `stage3/01-pistomp/` (app data, pedalboards). Key differences: we use pacman not apt, PKGBUILDs not bare `make install`, venvs not system Python, NetworkManager not wpa_supplicant, and system-packaged binaries (`/usr/bin/`) not `/opt/pistomp/bin/`.
+
+## Relationship to pi-stomp and mod-ui
+
+This repo builds the image that ultimately runs on the pi-Stomp hardware, running our customized versions of mod-ui and pi-stomp. These repositories are usually available checked out as peers to this directory.
 
 ## When editing
 
