@@ -174,7 +174,7 @@ cleanup
 TIMESTAMP="${BUILD_TIMESTAMP:-$(date +%Y-%m-%d)}"
 OUTPUT="${DEPLOY_DIR}/${IMG_NAME}-${TIMESTAMP}.img.zst"
 log "Compressing image to ${OUTPUT}..."
-zstd -T0 -6 "${IMG_FILE}" -o "${OUTPUT}"
+zstd -T0 -9 "${IMG_FILE}" -o "${OUTPUT}"
 
 log "Build complete: ${OUTPUT}"
 log "Image size: $(du -h "${OUTPUT}" | cut -f1)"
