@@ -4,6 +4,8 @@ After=sound.target
 
 [Service]
 User=jack
+Environment="JACK_NO_AUDIO_RESERVATION=1"
+Environment="JACK_PROMISCUOUS_SERVER=jack"
 Environment="LV2_PATH=/home/pistomp/.lv2:/usr/lib/lv2"
 ExecStart=/etc/jackdrc
 LimitRTPRIO=infinity

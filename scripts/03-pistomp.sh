@@ -32,7 +32,7 @@ pyenv global "${PYTHON_VERSION}"
 # ---------- uv ----------
 
 echo "==> Installing uv..."
-curl -LsSf https://astral.sh/uv/install.sh | CARGO_HOME="${PISTOMP_DIR}" sh
+curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${PISTOMP_DIR}/bin" INSTALLER_NO_MODIFY_PATH=1 sh
 UV_BIN="${PISTOMP_DIR}/bin/uv"
 
 # ---------- native PKGBUILDs ----------
@@ -49,12 +49,14 @@ build_pkg() {
     local build_dir="/tmp/build-${pkg}"
     cp -r "${PKGBUILDS}/${pkg}" "${build_dir}"
     chown -R builduser:builduser "${build_dir}"
-    cd "${build_dir}"
+    pushd "${build_dir}" > /dev/null
     su builduser -c "makepkg -s --noconfirm"
     pacman -U --noconfirm "${build_dir}"/*.pkg.tar.*
+    popd > /dev/null
     rm -rf "${build_dir}"
 }
 
+build_pkg "hylia"
 build_pkg "mod-host-pistomp"
 build_pkg "amidithru"
 build_pkg "mod-midi-merger"
@@ -77,25 +79,36 @@ echo "==> Installing mod-ui..."
 create_venv "mod-ui"
 
 git clone --depth 1 -b "${MODUI_BRANCH}" "${MODUI_REPO}" /tmp/mod-ui
-cd /tmp/mod-ui
 
 # Apply patches
 if [[ -d "${PATCHES}/mod-ui" ]]; then
     for patch in "${PATCHES}"/mod-ui/*.patch; do
-        [[ -f "$patch" ]] && git apply "$patch"
+        [[ -f "$patch" ]] && git -C /tmp/mod-ui apply "$patch"
     done
 fi
 
-"${UV_BIN}" pip install --python "${VENV_BASE}/mod-ui/bin/python" \
-    -e /tmp/mod-ui
+# mod-ui's setup.py declares bogus dependency names (tornado4, pil, pycrypto)
+# Install the real packages first, then install mod-ui with --no-deps
+MODUI_PYTHON="${VENV_BASE}/mod-ui/bin/python"
+"${UV_BIN}" pip install --python "${MODUI_PYTHON}" \
+    tornado==4.3 pillow pystache pycryptodome aggdraw pyserial
 
-# Keep mod-ui source installed in venv's site-packages (editable install)
-# Move source to permanent location
+# Patch tornado 4.3 for Python 3.11+ (collections.MutableMapping moved to collections.abc)
+TORNADO_DIR=$("${MODUI_PYTHON}" -c "import tornado, os; print(os.path.dirname(tornado.__file__))")
+sed -i 's/collections\.MutableMapping/collections.abc.MutableMapping/g' "${TORNADO_DIR}/httputil.py"
+
+# Install mod-ui as editable, skip broken dependency resolution
+"${UV_BIN}" pip install --python "${MODUI_PYTHON}" \
+    --no-deps -e /tmp/mod-ui
+
+# Build libmod_utils.so (native C library used by modtools/utils.py)
+make -C /tmp/mod-ui/utils clean
+make -C /tmp/mod-ui/utils
+
+# Move source to permanent location and re-install
 mv /tmp/mod-ui "${PISTOMP_DIR}/mod-ui"
-
-# Re-install as editable from permanent location
-"${UV_BIN}" pip install --python "${VENV_BASE}/mod-ui/bin/python" \
-    -e "${PISTOMP_DIR}/mod-ui"
+"${UV_BIN}" pip install --python "${MODUI_PYTHON}" \
+    --no-deps -e "${PISTOMP_DIR}/mod-ui"
 
 # --- pi-stomp ---
 
@@ -124,8 +137,18 @@ create_venv "browsepy"
 echo "==> Installing touchosc2midi..."
 create_venv "touchosc2midi"
 
-"${UV_BIN}" pip install --python "${VENV_BASE}/touchosc2midi/bin/python" \
+# pyliblo 0.10.0 (pulled by touchosc2midi) is broken with modern liblo
+# (lo_blob_dataptr signature changed) and Cython 3. Use pyliblo3, the
+# maintained fork, which fixes the liblo API issue.
+# Cython 3.1+ removed the `long` builtin that pyliblo3 still uses.
+_T2M_PY="${VENV_BASE}/touchosc2midi/bin/python"
+"${UV_BIN}" pip install --python "${_T2M_PY}" setuptools "Cython<3.1"
+"${UV_BIN}" pip install --python "${_T2M_PY}" --no-build-isolation pyliblo3
+"${UV_BIN}" pip install --python "${_T2M_PY}" --no-deps \
     "touchosc2midi @ git+${TOUCHOSC2MIDI_REPO}"
+# Install touchosc2midi's remaining deps (everything except pyliblo)
+"${UV_BIN}" pip install --python "${_T2M_PY}" \
+    python-rtmidi mido docopt netifaces zeroconf
 
 # ---------- application data ----------
 
@@ -134,6 +157,8 @@ echo "==> Installing application data..."
 # Pedalboards
 git clone --depth 1 -b "${PEDALBOARDS_BRANCH}" "${PEDALBOARDS_REPO}" \
     "/home/${FIRST_USER}/data/.pedalboards"
+# modify_version.sh and other scripts expect ~/.pedalboards
+ln -sf "/home/${FIRST_USER}/data/.pedalboards" "/home/${FIRST_USER}/.pedalboards"
 
 # User files
 git clone --depth 1 -b "${USERFILES_BRANCH}" "${USERFILES_REPO}" \
@@ -143,7 +168,7 @@ git clone --depth 1 -b "${USERFILES_BRANCH}" "${USERFILES_REPO}" \
 LV2_CACHE="/root/pistomp-arch/cache/lv2plugins.tar.gz"
 [[ -f "${LV2_CACHE}" ]] || { echo "ERROR: LV2 plugins not found at ${LV2_CACHE}. Run ./build-docker.sh first to download." >&2; exit 1; }
 echo "==> Installing LV2 plugins from cache..."
-tar xzf "${LV2_CACHE}" -C "/home/${FIRST_USER}/"
+tar xzf "${LV2_CACHE}" -C "/home/${FIRST_USER}/" --exclude='._*'
 ln -sf "/home/${FIRST_USER}/.lv2" "/home/${FIRST_USER}/data/.lv2"
 
 # ---------- fix ownership ----------
@@ -160,7 +185,7 @@ WANTS="/etc/systemd/system/multi-user.target.wants"
 mkdir -p "${WANTS}"
 
 for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot; do
-    install -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
+    install -v -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
 done
 
 # Services enabled by default
@@ -171,9 +196,13 @@ done
 # Services installed but NOT enabled by default
 for svc in ttymidi mod-midi-merger mod-midi-merger-broadcaster wifi-hotspot mod-touchosc2midi; do
     if [[ -f "${FILES}/${svc}.service" ]]; then
-        install -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
+        install -v -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
     fi
 done
+
+# Verify service files are in place
+echo "==> Verifying service files in ${SYSTEMD_DIR}:"
+ls -la "${SYSTEMD_DIR}"/{jack,mod-host,mod-ui,browsepy,mod-amidithru,mod-ala-pi-stomp,firstboot}.service
 
 # ---------- firstboot script ----------
 

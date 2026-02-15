@@ -16,10 +16,13 @@ Environment="MOD_PEDALBOARDS_DIR=/home/pistomp/data/.pedalboards"
 Environment="MOD_USER_FILES_DIR=/home/pistomp/data/user-files"
 Environment="MOD_KEYS_PATH=/home/pistomp/data/keys/"
 Environment="MOD_CLOUD_API=https://api.moddevices.com/v2"
+Environment="MOD_HTML_DIR=/opt/pistomp/mod-ui/html"
+Environment="MOD_DEFAULT_PEDALBOARD=/opt/pistomp/mod-ui/default.pedalboard"
 Environment="MOD_PATCHSTORAGE_PLATFORM_ID=8046"
 Environment="MOD_PATCHSTORAGE_TARGET_ID=8280"
+Environment="JACK_PROMISCUOUS_SERVER=jack"
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-ExecStart=/opt/pistomp/venvs/mod-ui/bin/python -m modui
+ExecStart=/opt/pistomp/venvs/mod-ui/bin/mod-ui
 Restart=always
 RestartSec=1
 

@@ -8,7 +8,9 @@ dtparam=i2s=on
 dtparam=spi=on
 
 # Kernel and initramfs
-auto_initramfs=1
+# ALARM's linux-rpi uses kernel8.img + initramfs-linux.img (not the
+# auto_initramfs naming convention), so specify explicitly.
+initramfs initramfs-linux.img followkernel
 arm_64bit=1
 arm_boost=1
 

@@ -3,7 +3,7 @@
 
 # Image
 IMG_NAME="pistompOS-arch"
-IMG_SIZE_MB=4096
+IMG_SIZE_MB=8192
 
 # System
 TARGET_HOSTNAME="pistomp"
@@ -15,9 +15,6 @@ KEYMAP="us"
 FIRST_USER="pistomp"
 FIRST_USER_PASS="pistomp"
 
-# ALARM tarball
-ALARM_TARBALL_URL="http://os.archlinuxarm.org/os/ArchLinuxARM-rpi-aarch64-latest.tar.gz"
-
 # Python
 PYTHON_VERSION="3.11.11"
 
@@ -28,7 +25,7 @@ PISTOMP_BRANCH="pistomp-v3"
 MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
 MODUI_BRANCH="fix/effect-parameter-from-snapshot"
 
-PEDALBOARDS_REPO="https://github.com/TreeFallSound/dot-pedalboards.git"
+PEDALBOARDS_REPO="https://github.com/sastraxi/dot-pedalboards.git"
 PEDALBOARDS_BRANCH="main"
 
 USERFILES_REPO="https://github.com/TreeFallSound/pi-stomp-user-files.git"

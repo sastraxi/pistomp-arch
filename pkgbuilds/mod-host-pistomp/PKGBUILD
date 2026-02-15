@@ -6,8 +6,8 @@ pkgdesc="LV2 host for MOD devices (pi-stomp build)"
 arch=('aarch64')
 url="https://github.com/mod-audio/mod-host"
 license=('GPL2')
-depends=('jack2' 'lilv' 'fftw' 'liblo')
-makedepends=('git')
+depends=('jack2' 'lilv' 'fftw' 'liblo' 'readline')
+makedepends=('git' 'hylia')
 provides=('mod-host')
 conflicts=('mod-host')
 source=("git+https://github.com/mod-audio/mod-host.git")
@@ -20,5 +20,5 @@ build() {
 
 package() {
     cd mod-host
-    install -Dm755 src/mod-host "${pkgdir}/usr/bin/mod-host"
+    install -Dm755 mod-host "${pkgdir}/usr/bin/mod-host"
 }

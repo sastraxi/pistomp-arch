@@ -11,12 +11,15 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 
 cleanup() {
     log "Cleaning up..."
-    # Unmount in reverse order
-    for mp in root/pistomp-arch/cache dev/pts dev/shm dev proc sys tmp; do
-        mountpoint -q "${ROOT_MNT}/${mp}" 2>/dev/null && umount -lf "${ROOT_MNT}/${mp}" || true
+    # Unmount in reverse order — use regular umount so writes flush to disk.
+    # Lazy umount (-l) detaches immediately but can lose data if the loop
+    # device is torn down before the kernel finishes writing.
+    for mp in root/pistomp-arch/cache boot; do
+        mountpoint -q "${ROOT_MNT}/${mp}" 2>/dev/null && umount "${ROOT_MNT}/${mp}" || true
     done
-    mountpoint -q "${BOOT_MNT}" 2>/dev/null && umount -lf "${BOOT_MNT}" || true
-    mountpoint -q "${ROOT_MNT}" 2>/dev/null && umount -lf "${ROOT_MNT}" || true
+    mountpoint -q "${BOOT_MNT}" 2>/dev/null && umount "${BOOT_MNT}" || true
+    mountpoint -q "${ROOT_MNT}" 2>/dev/null && umount "${ROOT_MNT}" || true
+    sync
     [[ -n "${LOOP_DEV:-}" ]] && kpartx -dv "${LOOP_DEV}" 2>/dev/null || true
     [[ -n "${LOOP_DEV:-}" ]] && losetup -d "${LOOP_DEV}" 2>/dev/null || true
 }
@@ -56,7 +59,7 @@ run_in_chroot() {
 
 [[ $EUID -eq 0 ]] || die "Must run as root"
 
-for cmd in fallocate parted losetup mkfs.vfat mkfs.ext4 arch-chroot kpartx; do
+for cmd in fallocate parted losetup mkfs.vfat mkfs.ext4 arch-chroot kpartx pacstrap; do
     command -v "$cmd" &>/dev/null || die "Missing required command: $cmd"
 done
 
@@ -71,18 +74,19 @@ mkdir -p "${WORK_DIR}" "${DEPLOY_DIR}"
 IMG_FILE="${WORK_DIR}/${IMG_NAME}.img"
 ROOT_MNT="${WORK_DIR}/rootfs"
 BOOT_MNT="${WORK_DIR}/boot"
-mkdir -p "${ROOT_MNT}" "${BOOT_MNT}"
 
-# Use cached ALARM tarball (from cache/ or work/)
-if [[ -f "${SCRIPT_DIR}/cache/alarm-aarch64.tar.gz" ]]; then
-    TARBALL="${SCRIPT_DIR}/cache/alarm-aarch64.tar.gz"
-elif [[ -f "${WORK_DIR}/alarm-aarch64.tar.gz" ]]; then
-    TARBALL="${WORK_DIR}/alarm-aarch64.tar.gz"
-else
-    TARBALL="${WORK_DIR}/alarm-aarch64.tar.gz"
-    log "Downloading ALARM tarball..."
-    curl -L -o "${TARBALL}" "${ALARM_TARBALL_URL}"
+# Clean up stale loop devices from previous failed builds
+if [[ -f "${IMG_FILE}" ]]; then
+    log "Cleaning up previous build artifacts..."
+    for loop in $(losetup -j "${IMG_FILE}" 2>/dev/null | cut -d: -f1); do
+        kpartx -dv "${loop}" 2>/dev/null || true
+        losetup -d "${loop}" 2>/dev/null || true
+    done
+    rm -f "${IMG_FILE}"
 fi
+umount -lf "${ROOT_MNT}" 2>/dev/null || true
+umount -lf "${BOOT_MNT}" 2>/dev/null || true
+mkdir -p "${ROOT_MNT}" "${BOOT_MNT}"
 
 # Create image file
 log "Creating ${IMG_SIZE_MB}MB image..."
@@ -111,7 +115,7 @@ ROOT_PART="/dev/mapper/${LOOP_NAME}p2"
 
 # Format
 log "Formatting partitions..."
-mkfs.vfat -F 32 "${BOOT_PART}"
+mkfs.vfat -F 32 -n PISTOMP "${BOOT_PART}"
 mkfs.ext4 -F "${ROOT_PART}"
 
 # Mount
@@ -122,20 +126,20 @@ mount "${BOOT_PART}" "${BOOT_MNT}"
 # ALARM expects /boot to be the FAT32 partition
 mount --bind "${BOOT_MNT}" "${ROOT_MNT}/boot"
 
-# Extract tarball
-log "Extracting ALARM tarball..."
-bsdtar -xpf "${TARBALL}" -C "${ROOT_MNT}"
+# Create vconsole.conf before pacstrap (mkinitcpio's sd-vconsole hook needs it)
+mkdir -p "${ROOT_MNT}/etc"
+echo "KEYMAP=${KEYMAP}" > "${ROOT_MNT}/etc/vconsole.conf"
 
-# Copy qemu for cross-arch execution (if host is not aarch64)
-if [[ "$(uname -m)" != "aarch64" ]]; then
-    QEMU_BIN=$(command -v qemu-aarch64-static 2>/dev/null || true)
-    if [[ -n "${QEMU_BIN}" ]]; then
-        log "Installing qemu-aarch64-static for cross-arch chroot..."
-        cp "${QEMU_BIN}" "${ROOT_MNT}/usr/bin/qemu-aarch64-static"
-    else
-        die "qemu-aarch64-static not found. Install qemu-user-static for cross-arch builds."
-    fi
-fi
+# Bootstrap rootfs with pacstrap
+log "Running pacstrap..."
+pacstrap -C "${SCRIPT_DIR}/files/pacman-aarch64.conf" -M -K "${ROOT_MNT}" \
+    base sudo systemd-sysvcompat \
+    linux-rpi linux-rpi-headers \
+    raspberrypi-bootloader firmware-raspberrypi \
+    archlinuxarm-keyring
+
+# Install the final pacman.conf (without DisableSandbox)
+install -m 644 "${SCRIPT_DIR}/files/pacman-alarm.conf" "${ROOT_MNT}/etc/pacman.conf"
 
 # Copy project files into chroot
 log "Copying project files into chroot..."
@@ -146,14 +150,6 @@ cp -r "${SCRIPT_DIR}/patches" "${ROOT_MNT}/root/pistomp-arch/"
 # Bind-mount cache to avoid copying large tarballs
 mkdir -p "${ROOT_MNT}/root/pistomp-arch/cache"
 mount --bind "${SCRIPT_DIR}/cache" "${ROOT_MNT}/root/pistomp-arch/cache"
-
-# Mount pseudo-filesystems for chroot
-mount -t proc proc "${ROOT_MNT}/proc"
-mount -t sysfs sys "${ROOT_MNT}/sys"
-mount --bind /dev "${ROOT_MNT}/dev"
-mount --bind /dev/pts "${ROOT_MNT}/dev/pts"
-mount --bind /dev/shm "${ROOT_MNT}/dev/shm"
-mount -t tmpfs tmpfs "${ROOT_MNT}/tmp"
 
 # ---------- run build scripts ----------
 
@@ -168,19 +164,11 @@ run_in_chroot "scripts/04-cleanup.sh"
 log "Unmounting..."
 cleanup
 
-# Remove qemu from image
-if [[ "$(uname -m)" != "aarch64" ]]; then
-    # Re-mount briefly to remove qemu
-    mount "${ROOT_PART}" "${ROOT_MNT}"
-    rm -f "${ROOT_MNT}/usr/bin/qemu-aarch64-static"
-    umount "${ROOT_MNT}"
-fi
-
 # Compress
-TIMESTAMP=$(date +%Y-%m-%d)
+TIMESTAMP="${BUILD_TIMESTAMP:-$(date +%Y-%m-%d)}"
 OUTPUT="${DEPLOY_DIR}/${IMG_NAME}-${TIMESTAMP}.img.zst"
 log "Compressing image to ${OUTPUT}..."
-zstd -T0 -19 "${IMG_FILE}" -o "${OUTPUT}"
+zstd -T0 -3 "${IMG_FILE}" -o "${OUTPUT}"
 
 log "Build complete: ${OUTPUT}"
 log "Image size: $(du -h "${OUTPUT}" | cut -f1)"

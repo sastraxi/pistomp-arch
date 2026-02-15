@@ -21,6 +21,7 @@ pacman -S --noconfirm --needed \
     iw \
     parted \
     dosfstools \
+    cloud-guest-utils \
     wget curl
 
 # ---------- enable services (via symlinks for chroot) ----------

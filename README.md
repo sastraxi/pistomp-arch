@@ -24,6 +24,17 @@ Requires Docker with [buildx](https://docs.docker.com/build/buildx/install/). On
 - **pyenv** + Python 3.11 + per-app virtualenvs at `/opt/pistomp/venvs/`
 - Pre-installed LV2 plugins + default pedalboards
 
+## How the Build Works
+
+The build is two-stage: **host-side image setup** followed by **chroot configuration**.
+
+1. **Image creation (host)** — `build.sh` creates a raw `.img` file, partitions it (FAT32 boot + ext4 root), attaches it as a loop device via `losetup`/`kpartx`, and mounts the partitions.
+2. **pacstrap (host)** — Installs a fresh Arch Linux ARM rootfs directly from ALARM mirrors into the mounted image. No pre-built tarball needed.
+3. **Chroot scripts (target)** — `arch-chroot` enters the rootfs and runs the numbered scripts (`00-base.sh` through `04-cleanup.sh`) sequentially. These configure the system as if running on the Pi itself.
+4. **Finalize (host)** — Unmounts everything, detaches the loop device, and compresses the image with zstd.
+
+When running via `build-docker.sh`, the entire process happens inside a privileged Docker container (an aarch64 Arch Linux image with `arch-install-scripts`). The host only needs Docker.
+
 ## Build Scripts
 
 | Script | Phase |
@@ -55,11 +66,10 @@ The image ships with a standard (non-RT) kernel. See [docs/rt-kernel.md](docs/rt
 ## Direct Build (Linux only)
 
 ```bash
-# Download cache files first
+# Download LV2 plugins cache first
 mkdir -p cache
 curl -L -o cache/lv2plugins.tar.gz https://www.treefallsound.com/downloads/lv2plugins.tar.gz
-curl -L -o cache/alarm-aarch64.tar.gz http://os.archlinuxarm.org/os/ArchLinuxARM-rpi-aarch64-latest.tar.gz
 
-# Build as root
+# Build as root (requires arch-install-scripts, parted, dosfstools, e2fsprogs, multipath-tools)
 sudo ./build.sh
 ```

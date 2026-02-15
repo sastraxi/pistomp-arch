@@ -5,26 +5,11 @@ echo "==> 00-base: Bootstrap system"
 
 # ---------- pacman init ----------
 
-# Disable Landlock sandbox (doesn't work in chroot/Docker)
-sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
-
 pacman-key --init
 pacman-key --populate archlinuxarm
 
 # Create vconsole.conf early (mkinitcpio needs it during kernel install)
 echo "KEYMAP=${KEYMAP}" > /etc/vconsole.conf
-
-# Remove vim and dependents before upgrade (ALARM ships them, mirror frequently 404s)
-pacman -Rdd --noconfirm gvim vim vim-runtime vi 2>/dev/null || true
-
-# Full system upgrade + sudo
-pacman -Syu --noconfirm --ignore vim,vim-runtime,gvim
-pacman -S --noconfirm --needed sudo
-
-# Replace generic kernel with RPi-specific kernel (supports Pi 3/4/5)
-# Remove conflicting packages first
-pacman -Rdd --noconfirm linux-aarch64 uboot-raspberrypi 2>/dev/null || true
-pacman -S --noconfirm linux-rpi linux-rpi-headers
 
 # ---------- locale ----------
 
@@ -61,8 +46,8 @@ sed -i 's/^# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/%wheel ALL=(ALL:ALL) NOPASSWD: A
 # Create jack user for JACK daemon
 useradd -r -M -G audio -s /usr/bin/nologin jack 2>/dev/null || true
 
-# Remove default alarm user (ALARM ships with alarm:alarm)
-userdel -r alarm 2>/dev/null || true
+# pistomp user needs jack group for JACK socket access
+usermod -aG jack "${FIRST_USER}"
 
 # ---------- boot config ----------
 

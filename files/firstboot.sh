@@ -9,11 +9,13 @@ CONF="/boot/pistomp.conf"
 if [[ -f "${CONF}" ]]; then
     source "${CONF}"
 
-    # WiFi
+    # WiFi — create the connection profile so NM connects automatically
     if [[ -n "${WIFI_SSID:-}" ]]; then
-        nmcli device wifi connect "${WIFI_SSID}" password "${WIFI_PASSWORD}" || true
-        # Persist country code
         iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
+        nmcli connection add type wifi ifname wld0 con-name "${WIFI_SSID}" \
+            ssid "${WIFI_SSID}" \
+            wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PASSWORD}" \
+            connection.autoconnect yes || true
     fi
 
     # Hostname
@@ -40,6 +42,16 @@ if [[ -f "${CONF}" ]]; then
         chmod 600 /home/pistomp/.ssh/authorized_keys
         chown -R pistomp:pistomp /home/pistomp/.ssh
     fi
+fi
+
+# ---------- expand root partition to fill SD card ----------
+
+if command -v growpart &>/dev/null; then
+    ROOT_DEV="$(findmnt -n -o SOURCE /)"
+    DISK="/dev/$(lsblk -no PKNAME "${ROOT_DEV}")"
+    PARTNUM="$(echo "${ROOT_DEV}" | grep -o '[0-9]*$')"
+    growpart "${DISK}" "${PARTNUM}" || true
+    resize2fs "${ROOT_DEV}" || true
 fi
 
 # ---------- hardware setup ----------

@@ -13,12 +13,6 @@ if [[ ! -f "${SCRIPT_DIR}/cache/lv2plugins.tar.gz" ]]; then
     curl -L -o "${SCRIPT_DIR}/cache/lv2plugins.tar.gz" "${LV2_PLUGINS_URL}"
 fi
 
-ALARM_CACHE="${SCRIPT_DIR}/cache/alarm-aarch64.tar.gz"
-if [[ ! -f "${ALARM_CACHE}" ]]; then
-    echo "==> Downloading ALARM tarball..."
-    curl -L -o "${ALARM_CACHE}" "${ALARM_TARBALL_URL}"
-fi
-
 # ---------- build docker image ----------
 
 if [[ "${1:-}" == "--rebuild" ]] || ! docker image inspect pistomp-arch-builder &>/dev/null; then
@@ -33,8 +27,12 @@ fi
 echo "==> Starting build in Docker..."
 mkdir -p "${SCRIPT_DIR}/deploy"
 
-docker run --rm --privileged \
-    -v "${SCRIPT_DIR}:/build" \
-    pistomp-arch-builder
+TIMESTAMP=$(date +%Y-%m-%d)
+LOG_FILE="${SCRIPT_DIR}/deploy/build-${TIMESTAMP}.log"
 
-echo "==> Done. Image in deploy/"
+docker run --rm --privileged \
+    -e "BUILD_TIMESTAMP=${TIMESTAMP}" \
+    -v "${SCRIPT_DIR}:/build" \
+    pistomp-arch-builder 2>&1 | tee "${LOG_FILE}"
+
+echo "==> Done. Image in deploy/, log at ${LOG_FILE}"

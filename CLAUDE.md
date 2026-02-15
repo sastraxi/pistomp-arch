@@ -13,19 +13,19 @@ sudo ./build.sh            # Build image (Linux, native)
 ## Directory structure
 
 ```
-build.sh / build-docker.sh   # Image builder (loop mount + chroot)
+build.sh / build-docker.sh   # Image builder (pacstrap + arch-chroot)
 config.sh                    # All version pins, URLs, repo refs — single source of truth
 scripts/
-  00-base.sh                 # Pacman init, kernel, locale, users
+  00-base.sh                 # Pacman keyring, locale, users
   01-system.sh               # Networking, SSH, GPIO, authbind
   02-audio.sh                # JACK2, LV2, ALSA, RT limits
   03-pistomp.sh              # pyenv, uv, PKGBUILDs, venvs, services, app data
   04-cleanup.sh              # Shrink image
 pkgbuilds/                   # Pacman packages for C components (mod-host, amidithru, etc.)
-files/                       # Static config files, systemd units, boot scripts
+files/                       # Static config files, systemd units, pacman configs, boot scripts
 patches/                     # Patches applied during build (mod-ui, etc.)
 docs/                        # Extended docs (RT kernel guide, etc.)
-cache/                       # Downloaded tarballs (gitignored)
+cache/                       # Downloaded LV2 plugins tarball (gitignored)
 ```
 
 ## Principles
@@ -47,6 +47,7 @@ cache/                       # Downloaded tarballs (gitignored)
 
 ## Key decisions
 
+- **pacstrap, not tarball** — rootfs is bootstrapped fresh from ALARM mirrors via `pacstrap`. No pre-built tarball. `files/pacman-aarch64.conf` (with `DisableSandbox` for Docker/chroot) is used during build; `files/pacman-alarm.conf` (without it) is installed into the final image.
 - **Stock kernel** — ships `linux-rpi`, not RT. RT kernel is Phase 6 (see `docs/rt-kernel.md`).
 - **Pre-built LV2 plugins** — downloaded as tarball, not compiled. `libfluidsynth2-compat` PKGBUILD provides .so.2 shim for Debian-built plugins.
 - **makepkg needs a non-root user** — scripts create/destroy a temporary `builduser` for PKGBUILD compilation.

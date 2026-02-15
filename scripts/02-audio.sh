@@ -23,6 +23,7 @@ pacman -S --noconfirm --needed \
 usermod -aG audio jack 2>/dev/null || true
 
 # Set realtime priority and memlock limits for audio group
+mkdir -p /etc/security/limits.d
 cat > /etc/security/limits.d/99-audio.conf <<EOF
 @audio   -  rtprio     95
 @audio   -  memlock    unlimited
@@ -31,7 +32,8 @@ EOF
 
 # ---------- JACK config ----------
 
-install -m 644 /root/pistomp-arch/files/jackdrc /etc/jackdrc
+install -m 755 /root/pistomp-arch/files/jackdrc /etc/jackdrc
+chown jack:jack /etc/jackdrc
 
 # ---------- ALSA config ----------
 

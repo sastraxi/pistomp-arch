@@ -1,0 +1,21 @@
+# Maintainer: pistomp
+pkgname=hylia
+pkgver=1.0
+pkgrel=1
+pkgdesc="Host transport library for Ableton Link"
+arch=('aarch64')
+url="https://github.com/falkTX/Hylia"
+license=('GPL2')
+makedepends=('git')
+source=("git+https://github.com/falkTX/Hylia.git")
+sha256sums=('SKIP')
+
+build() {
+    cd Hylia
+    make PREFIX=/usr NOOPT=true
+}
+
+package() {
+    cd Hylia
+    make PREFIX=/usr DESTDIR="${pkgdir}" install
+}
