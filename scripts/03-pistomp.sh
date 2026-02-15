@@ -12,23 +12,6 @@ PATCHES="/root/pistomp-arch/patches"
 
 mkdir -p "${PISTOMP_DIR}" "${VENV_BASE}"
 
-# ---------- pyenv ----------
-
-echo "==> Installing pyenv..."
-git clone --depth 1 https://github.com/pyenv/pyenv.git "${PYENV_ROOT}"
-
-export PYENV_ROOT
-export PATH="${PYENV_ROOT}/bin:${PYENV_ROOT}/shims:${PATH}"
-
-# Install Python build dependencies
-pacman -S --noconfirm --needed \
-    openssl zlib xz tk sqlite bzip2 readline libffi
-
-# Build Python
-echo "==> Building Python ${PYTHON_VERSION}..."
-pyenv install "${PYTHON_VERSION}"
-pyenv global "${PYTHON_VERSION}"
-
 # ---------- uv ----------
 
 echo "==> Installing uv..."
@@ -62,6 +45,26 @@ build_pkg "amidithru"
 build_pkg "mod-midi-merger"
 build_pkg "mod-ttymidi"
 build_pkg "libfluidsynth2-compat"
+# lg must be built before pyenv is set up, so python3 resolves to
+# /usr/bin/python3 (system 3.14) and the SWIG module installs there.
+build_pkg "lg"
+
+# ---------- pyenv (for mod-ui, browsepy, touchosc2midi only) ----------
+
+echo "==> Installing pyenv..."
+git clone --depth 1 https://github.com/pyenv/pyenv.git "${PYENV_ROOT}"
+
+export PYENV_ROOT
+export PATH="${PYENV_ROOT}/bin:${PYENV_ROOT}/shims:${PATH}"
+
+# Install Python build dependencies
+pacman -S --noconfirm --needed \
+    openssl zlib xz tk sqlite bzip2 readline libffi
+
+# Build Python
+echo "==> Building Python ${PYTHON_VERSION}..."
+pyenv install "${PYTHON_VERSION}"
+pyenv global "${PYTHON_VERSION}"
 
 # ---------- Python virtualenvs ----------
 
@@ -113,16 +116,35 @@ mv /tmp/mod-ui "${PISTOMP_DIR}/mod-ui"
 # --- pi-stomp ---
 
 echo "==> Installing pi-stomp..."
-create_venv "pi-stomp"
+# pi-stomp venv uses system Python to access system C extensions
+# (lilv, smbus, gpiod, lgpio)
+"${UV_BIN}" venv --python /usr/bin/python3 --system-site-packages "${VENV_BASE}/pi-stomp"
 
 git clone --depth 1 -b "${PISTOMP_BRANCH}" "${PISTOMP_REPO}" "/home/${FIRST_USER}/pi-stomp"
 
-# Install pi-stomp dependencies
+# Pre-install ALSA state so alsa-restore loads correct mixer settings on first boot
+# (before firstboot.service runs). Without this, the IQAudio DAC doesn't clock and JACK times out.
+mkdir -p /var/lib/alsa
+cp "/home/${FIRST_USER}/pi-stomp/setup/audio/iqaudiocodec.state" /var/lib/alsa/asound.state
+
+# Create a dummy rpi-gpio package to satisfy dependencies that haven't
+# migrated to rpi-lgpio yet (like cap1xxx via gfxhat). rpi-lgpio provides the 
+# actual RPi.GPIO module and is installed as part of [hardware] extras.
+mkdir -p /tmp/fake-rpi-gpio
+cat > /tmp/fake-rpi-gpio/pyproject.toml <<EOF
+[project]
+name = "rpi-gpio"
+version = "99.9.9"
+EOF
+"${UV_BIN}" pip install --python "${VENV_BASE}/pi-stomp/bin/python" /tmp/fake-rpi-gpio
+
+# Install pi-stomp and its dependencies from pyproject.toml
 "${UV_BIN}" pip install --python "${VENV_BASE}/pi-stomp/bin/python" \
-    pyserial mido Pillow python-rtmidi RPi.GPIO spidev \
-    adafruit-circuitpython-charlcd adafruit-circuitpython-mcp3xxx \
-    rpi_ws281x gfxhat \
-    pystache pyyaml
+    -e "/home/${FIRST_USER}/pi-stomp[hardware]"
+
+# Pi 5 neopixel support (not declared as a dependency by adafruit-circuitpython-neopixel)
+"${UV_BIN}" pip install --python "${VENV_BASE}/pi-stomp/bin/python" \
+    Adafruit-Blinka-Raspberry-Pi5-Neopixel
 
 # --- browsepy ---
 
@@ -170,6 +192,28 @@ LV2_CACHE="/root/pistomp-arch/cache/lv2plugins.tar.gz"
 echo "==> Installing LV2 plugins from cache..."
 tar xzf "${LV2_CACHE}" -C "/home/${FIRST_USER}/" --exclude='._*'
 ln -sf "/home/${FIRST_USER}/.lv2" "/home/${FIRST_USER}/data/.lv2"
+
+# ---------- last.json generation ----------
+
+echo "==> Generating last.json..."
+DATA_DIR="/home/${FIRST_USER}/data"
+LAST_JSON="${DATA_DIR}/last.json"
+PEDALBOARDS_DIR="${DATA_DIR}/.pedalboards"
+
+# Find first pedalboard (prefer default.pedalboard if it exists)
+if [[ -d "${PEDALBOARDS_DIR}/default.pedalboard" ]]; then
+    FIRST_PB="${PEDALBOARDS_DIR}/default.pedalboard"
+else
+    # Find first .pedalboard directory
+    FIRST_PB=$(find "${PEDALBOARDS_DIR}" -maxdepth 1 -name '*.pedalboard' -type d | head -n 1 || true)
+fi
+
+if [[ -n "${FIRST_PB}" ]]; then
+    echo "{\"bank\": -2, \"pedalboard\": \"${FIRST_PB}\", \"supportsDividers\": true}" > "${LAST_JSON}"
+else
+    echo "Warning: No pedalboards found, creating empty last.json"
+    echo '{"bank": -2, "pedalboard": "", "supportsDividers": true}' > "${LAST_JSON}"
+fi
 
 # ---------- fix ownership ----------
 

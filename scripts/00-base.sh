@@ -46,8 +46,11 @@ sed -i 's/^# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/%wheel ALL=(ALL:ALL) NOPASSWD: A
 # Create jack user for JACK daemon
 useradd -r -M -G audio -s /usr/bin/nologin jack 2>/dev/null || true
 
-# pistomp user needs jack group for JACK socket access
-usermod -aG jack "${FIRST_USER}"
+# Create gpio system group for Pi 5 PIO/GPIO device access
+groupadd -r gpio 2>/dev/null || true
+
+# pistomp user needs jack group for JACK socket access, gpio for PIO devices
+usermod -aG jack,gpio "${FIRST_USER}"
 
 # ---------- boot config ----------
 

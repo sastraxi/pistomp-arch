@@ -11,14 +11,20 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 
 cleanup() {
     log "Cleaning up..."
-    # Unmount in reverse order — use regular umount so writes flush to disk.
-    # Lazy umount (-l) detaches immediately but can lose data if the loop
-    # device is torn down before the kernel finishes writing.
-    for mp in root/pistomp-arch/cache boot; do
-        mountpoint -q "${ROOT_MNT}/${mp}" 2>/dev/null && umount "${ROOT_MNT}/${mp}" || true
-    done
+    sync
+    # arch-chroot leaves behind /proc, /sys, /dev, /run mounts inside the
+    # rootfs. umount -R (recursive) handles all submounts in the correct
+    # reverse order. This is NOT lazy unmount — each unmount is real and
+    # flushes data before proceeding.
+    if mountpoint -q "${ROOT_MNT}" 2>/dev/null; then
+        umount -R "${ROOT_MNT}" 2>/dev/null || {
+            # If recursive unmount fails, kill stale processes and retry
+            fuser -km "${ROOT_MNT}" 2>/dev/null || true
+            sleep 1
+            umount -R "${ROOT_MNT}" 2>/dev/null || true
+        }
+    fi
     mountpoint -q "${BOOT_MNT}" 2>/dev/null && umount "${BOOT_MNT}" || true
-    mountpoint -q "${ROOT_MNT}" 2>/dev/null && umount "${ROOT_MNT}" || true
     sync
     [[ -n "${LOOP_DEV:-}" ]] && kpartx -dv "${LOOP_DEV}" 2>/dev/null || true
     [[ -n "${LOOP_DEV:-}" ]] && losetup -d "${LOOP_DEV}" 2>/dev/null || true
@@ -168,7 +174,7 @@ cleanup
 TIMESTAMP="${BUILD_TIMESTAMP:-$(date +%Y-%m-%d)}"
 OUTPUT="${DEPLOY_DIR}/${IMG_NAME}-${TIMESTAMP}.img.zst"
 log "Compressing image to ${OUTPUT}..."
-zstd -T0 -3 "${IMG_FILE}" -o "${OUTPUT}"
+zstd -T0 -6 "${IMG_FILE}" -o "${OUTPUT}"
 
 log "Build complete: ${OUTPUT}"
 log "Image size: $(du -h "${OUTPUT}" | cut -f1)"

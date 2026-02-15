@@ -15,3 +15,7 @@ if ! nmcli connection show "${SSID}-hotspot" &>/dev/null; then
 fi
 
 nmcli connection up "${SSID}-hotspot"
+
+# Restart mod-ui so it rebinds WebSocket connections to the new network
+# (see https://github.com/TreeFallSound/pi-stomp/issues/108)
+systemctl restart mod-ui.service

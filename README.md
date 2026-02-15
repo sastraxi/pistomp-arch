@@ -15,6 +15,57 @@ Supports Raspberry Pi 3, 4, and 5.
 
 Requires Docker with [buildx](https://docs.docker.com/build/buildx/install/). On macOS with Homebrew: `brew install docker-buildx` and add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`. First run downloads ~500MB of base OS + LV2 plugins into `cache/`.
 
+## Flashing
+
+Flash with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) (select "Use custom" .img) or `dd`.
+
+**Important:** When Raspberry Pi Imager asks about "OS customization", click **No** — those options are Pi OS-specific and will not work with this image.
+
+After flashing, mount the boot partition (FAT32 — auto-mounts on Mac/Windows/Linux) and edit **`pistomp.conf`**:
+
+```ini
+WIFI_SSID="MyNetwork"
+WIFI_PASSWORD="secret"
+WIFI_COUNTRY="US"
+SSH_AUTHORIZED_KEY="ssh-ed25519 AAAA..."
+# HOSTNAME="pistomp"
+# TIMEZONE="US/Central"
+# USER_PASSWORD="pistomp"
+```
+
+Insert the SD card and power on. First boot takes a couple of minutes.
+
+## First Boot
+
+On first boot, `firstboot.service` runs automatically and:
+
+1. Applies settings from `pistomp.conf` (WiFi, hostname, timezone, SSH key, password)
+2. Expands the root partition to fill the SD card
+3. Copies ALSA mixer state for the IQAudio DAC
+4. Sets pi-stomp hardware version (v2.0 for Pi 3, v3.0 for Pi 4/5)
+5. Reboots
+
+After the reboot, the full service chain starts: JACK → mod-host → mod-ui → pi-stomp. The web UI is available on port 80.
+
+## Debugging
+
+Default credentials: `pistomp` / `pistomp` (SSH enabled).
+
+```bash
+ssh pistomp@pistomp.local
+
+# Check service status
+systemctl status jack mod-host mod-ui mod-ala-pi-stomp
+
+# Follow logs
+journalctl -f -u jack -u mod-host -u mod-ui
+
+# Restart the audio stack
+sudo systemctl restart jack    # cascades to all dependent services
+```
+
+The WiFi interface is renamed to `wlan0` via udev rule (Arch defaults to `wld0`, but pi-stomp expects `wlan0`).
+
 ## What's in the Image
 
 - **Arch Linux ARM** with stock `linux-rpi` kernel
@@ -23,6 +74,49 @@ Requires Docker with [buildx](https://docs.docker.com/build/buildx/install/). On
 - **mod-host**, **mod-ui**, **browsepy**, **amidithru**, **ttymidi**, **mod-midi-merger**
 - **pyenv** + Python 3.11 + per-app virtualenvs at `/opt/pistomp/venvs/`
 - Pre-installed LV2 plugins + default pedalboards
+
+## Service Chain
+
+```
+jack.service (user: jack)
+  ├─ mod-host.service (user: pistomp)
+  │    ├─ mod-ui.service (user: pistomp, port 80)
+  │    │    └─ mod-ala-pi-stomp.service (user: pistomp)
+  │    └─ browsepy.service (user: pistomp)
+  └─ mod-amidithru.service (user: pistomp)
+```
+
+Optional services (installed but not enabled): `ttymidi`, `mod-midi-merger`, `mod-midi-merger-broadcaster`, `mod-touchosc2midi`, `wifi-hotspot`.
+
+## Data Layout
+
+```
+/home/pistomp/
+  pi-stomp/                    # pi-stomp application source
+  data/
+    .pedalboards/              # Pedalboard files (git repo)
+    .lv2 -> ../.lv2            # Symlink to LV2 plugins
+    user-files/                # User-uploaded files (browsepy)
+    banks.json                 # Bank configuration
+    favorites.json, prefs.json # mod-ui state
+  .pedalboards -> data/.pedalboards   # Compat symlink
+  .lv2/                        # LV2 plugin bundles
+
+/opt/pistomp/
+  pyenv/                       # pyenv + Python 3.11
+  venvs/{mod-ui,pi-stomp,browsepy,touchosc2midi}/
+  mod-ui/                      # mod-ui source tree (editable install)
+  bin/uv                       # uv package manager
+
+/etc/jackdrc                   # JACK startup config (owned by jack:jack)
+/boot/pistomp.conf             # First-boot user config (FAT32)
+```
+
+## RT Kernel
+
+The image ships with a standard (non-RT) kernel. See [docs/rt-kernel.md](docs/rt-kernel.md) for options — since Linux 6.12, PREEMPT_RT is a config flag, no patch needed.
+
+---
 
 ## How the Build Works
 
@@ -35,8 +129,6 @@ The build is two-stage: **host-side image setup** followed by **chroot configura
 
 When running via `build-docker.sh`, the entire process happens inside a privileged Docker container (an aarch64 Arch Linux image with `arch-install-scripts`). The host only needs Docker.
 
-## Build Scripts
-
 | Script | Phase |
 |--------|-------|
 | `00-base.sh` | Pacman init, kernel, locale, users |
@@ -44,24 +136,6 @@ When running via `build-docker.sh`, the entire process happens inside a privileg
 | `02-audio.sh` | JACK2, LV2 stack, ALSA config, RT limits |
 | `03-pistomp.sh` | pyenv, uv, PKGBUILDs, venvs, app data, services |
 | `04-cleanup.sh` | Clear caches, remove build artifacts |
-
-## Flashing
-
-Flash with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) (select "Use custom" .img) or `dd`.
-
-After flashing, mount the boot partition (FAT32 — auto-mounts on Mac/Windows/Linux) and edit **`pistomp.conf`**:
-
-```ini
-WIFI_SSID="MyNetwork"
-WIFI_PASSWORD="secret"
-SSH_AUTHORIZED_KEY="ssh-ed25519 AAAA..."
-```
-
-Settings are applied on first boot. See the file for all options (hostname, timezone, password).
-
-## RT Kernel
-
-The image ships with a standard (non-RT) kernel. See [docs/rt-kernel.md](docs/rt-kernel.md) for options — since Linux 6.12, PREEMPT_RT is a config flag, no patch needed.
 
 ## Direct Build (Linux only)
 

@@ -12,7 +12,7 @@ if [[ -f "${CONF}" ]]; then
     # WiFi — create the connection profile so NM connects automatically
     if [[ -n "${WIFI_SSID:-}" ]]; then
         iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
-        nmcli connection add type wifi ifname wld0 con-name "${WIFI_SSID}" \
+        nmcli connection add type wifi ifname wlan0 con-name "preconfigured" \
             ssid "${WIFI_SSID}" \
             wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PASSWORD}" \
             connection.autoconnect yes || true
@@ -56,13 +56,13 @@ fi
 
 # ---------- hardware setup ----------
 
-# Fix ownership
-chown -R pistomp:pistomp /home/pistomp/
-
 # Copy audio card settings (IQAudio DAC+)
 if [[ -f /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state ]]; then
     cp /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state /var/lib/alsa/asound.state
 fi
+
+# Fix ownership
+chown -R pistomp:pistomp /home/pistomp/
 
 # Set pi-stomp version (2.0 for Pi3, 3.0 for others)
 if grep -q 'Pi 3' /proc/cpuinfo 2>/dev/null; then

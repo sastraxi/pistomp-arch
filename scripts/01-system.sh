@@ -22,7 +22,9 @@ pacman -S --noconfirm --needed \
     parted \
     dosfstools \
     cloud-guest-utils \
-    wget curl
+    wget curl \
+    ttf-dejavu \
+    raspberrypi-utils
 
 # ---------- enable services (via symlinks for chroot) ----------
 
@@ -35,11 +37,21 @@ ln -sf /usr/lib/systemd/system/avahi-daemon.service "${WANTS}/"
 
 # ---------- hardware access (GPIO/SPI/I2C via udev) ----------
 
-# Grant wheel group access to hardware peripherals (Arch has no gpio/spi/i2c groups)
+# Grant gpio group access to hardware peripherals (gpio group created in 00-base.sh)
+# Also provide a /dev/gpiochip4 symlink on Pi 5 to satisfy gpiozero 2.0.1 which
+# hardcodes chip 4 for Pi 5 (but Arch/Kernel 6.12+ maps it to chip 0).
 cat > /etc/udev/rules.d/99-pistomp-hw.rules <<'EOF'
-SUBSYSTEM=="gpio", KERNEL=="gpiochip*", GROUP="wheel", MODE="0660"
-SUBSYSTEM=="spidev", KERNEL=="spidev*", GROUP="wheel", MODE="0660"
-SUBSYSTEM=="i2c-dev", KERNEL=="i2c-[0-9]*", GROUP="wheel", MODE="0660"
+SUBSYSTEM=="gpio", KERNEL=="gpiochip*", GROUP="gpio", MODE="0660"
+SUBSYSTEM=="gpio", KERNEL=="gpiochip*", DRIVERS=="pinctrl-rp1", SYMLINK+="gpiochip4"
+SUBSYSTEM=="spidev", KERNEL=="spidev*", GROUP="gpio", MODE="0660"
+SUBSYSTEM=="i2c-dev", KERNEL=="i2c-[0-9]*", GROUP="gpio", MODE="0660"
+SUBSYSTEM=="rp1-pio", GROUP="gpio", MODE="0660"
+EOF
+
+# Rename WiFi interface to wlan0 for pi-stomp compatibility
+# (Arch uses predictable names like wld0, but pi-stomp hardcodes wlan0)
+cat > /etc/udev/rules.d/70-wifi-name.rules <<'EOF'
+SUBSYSTEM=="net", ACTION=="add", ENV{DEVTYPE}=="wlan", NAME="wlan0"
 EOF
 
 # ---------- SSH config ----------

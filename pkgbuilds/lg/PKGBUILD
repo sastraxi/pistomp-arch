@@ -1,0 +1,57 @@
+# Maintainer: pistomp
+pkgname=lg
+pkgver=0.2.2
+pkgrel=1
+pkgdesc="Linux C library and Python bindings for GPIO (lgpio/rgpio)"
+arch=('aarch64')
+url="https://github.com/joan2937/lg"
+license=('Unlicense')
+depends=('python')
+makedepends=('swig' 'python-setuptools')
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/joan2937/lg/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+    cd "${pkgname}-${pkgver}"
+    # GCC 14+ treats K&R-style () as "zero args", making the call at
+    # lgHdl.c:409 — (h->destructor)(h->obj) — a hard "too many arguments"
+    # error. Fix the typedef so destructors accept their void* argument.
+    sed -i 's/typedef void (\*callbk_t) ();/typedef void (*callbk_t)(void *);/' lgpio.h
+    # alertFunc and lgGpioSamplesFunc are called with 3 args (int, ptr, ptr)
+    # but typed as callbk_t (1 arg). Fix them to their actual type.
+    sed -i 's/callbk_t alertFunc;/lgGpioAlertsFunc_t alertFunc;/' lgGpio.h
+    sed -i 's/^callbk_t lgGpioSamplesFunc/lgGpioAlertsFunc_t lgGpioSamplesFunc/' lgGpio.c
+    sed -i 's/^extern callbk_t lgGpioSamplesFunc/extern lgGpioAlertsFunc_t lgGpioSamplesFunc/' lgGpio.h
+}
+
+build() {
+    cd "${pkgname}-${pkgver}"
+    # The codebase also stores lgGpioAlertsFunc_t (3-arg callback) through
+    # callbk_t fields. These are type-mismatched but ABI-safe on aarch64.
+    export CFLAGS+=" -Wno-incompatible-pointer-types"
+    make liblgpio.so
+    # SWIG-generate the Python wrapper, then build the C extension
+    cd PY_LGPIO
+    swig -python lgpio.i
+    /usr/bin/python3 setup.py build_ext --include-dirs=.. --library-dirs=..
+    cd ..
+}
+
+package() {
+    cd "${pkgname}-${pkgver}"
+
+    # Shared library
+    install -Dm755 liblgpio.so.1 "${pkgdir}/usr/lib/liblgpio.so.1"
+    ln -s liblgpio.so.1 "${pkgdir}/usr/lib/liblgpio.so"
+
+    # Header
+    install -Dm644 lgpio.h "${pkgdir}/usr/include/lgpio.h"
+
+    # Python lgpio module (SWIG-generated)
+    # Use /usr/bin/python3 explicitly — pyenv shims may be on PATH
+    local pyver=$(/usr/bin/python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    local sitepkgs="${pkgdir}/usr/lib/python${pyver}/site-packages"
+    install -d "${sitepkgs}"
+    cd PY_LGPIO
+    /usr/bin/python3 setup.py install --root="${pkgdir}" --optimize=1
+}

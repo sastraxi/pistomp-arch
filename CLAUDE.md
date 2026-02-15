@@ -64,6 +64,36 @@ jack.service
   └─ mod-amidithru.service
 ```
 
+## Pitfalls (hard-won lessons)
+
+### JACK permissions
+JACK runs as `jack` user. Its socket is `rw-rw----` owned by `jack:jack`. Every JACK client service needs `JACK_PROMISCUOUS_SERVER=jack` in its environment, and `pistomp` must be in the `jack` group. Missing either = "Permission denied" at runtime. `JACK_NO_AUDIO_RESERVATION=1` is also required in `jack.service` (no D-Bus session bus on headless).
+
+### Editable pip installs skip data_files
+mod-ui is installed with `pip install -e` (editable). This means `data_files` from `setup.py` are never copied — `sys.prefix + '/share/mod/html/'` doesn't exist. We set `MOD_HTML_DIR` and `MOD_DEFAULT_PEDALBOARD` in `mod-ui.service` to point at the source tree instead.
+
+### libmod_utils.so is not built by pip
+mod-ui's `modtools/utils.py` loads `libmod_utils.so` via ctypes. This C library (`utils/` directory) requires a separate `make` step — `pip install` does not build it. The editable install means the fallback path `../utils/libmod_utils.so` resolves correctly from the source tree.
+
+### WiFi interface renamed to wlan0 via udev
+Arch uses predictable names (`wld0`), but pi-stomp hardcodes `wlan0`. A udev rule in `01-system.sh` renames the WiFi interface to `wlan0`. The NetworkManager connection must be named `preconfigured` (what pi-stomp's `wifi.py` expects).
+
+### pyliblo is broken; use pyliblo3
+`pyliblo` 0.10.0 is incompatible with modern liblo and Cython 3.x. Use `pyliblo3` (maintained fork) with `Cython<3.1` (3.1 removed the `long` builtin). touchosc2midi must be installed `--no-deps` to avoid pulling broken pyliblo.
+
+### Build footguns
+- **Never `umount -lf`** — lazy unmount causes data loss (buffered writes lost before loop teardown). Use `umount` + `sync`.
+- **`vconsole.conf` must exist before `pacstrap`** — mkinitcpio's `sd-vconsole` hook fails otherwise.
+- **Don't `rm -rf /root/pistomp-arch`** in cleanup — it destroys the bind-mounted `cache/` directory (883MB LV2 tarball). Only delete `files/`, `pkgbuilds/`, `patches/`.
+- **`config.txt` must use explicit `initramfs` line** — ALARM's initramfs filename (`initramfs-linux.img`) doesn't match what `auto_initramfs=1` expects.
+
+### ALSA state
+`firstboot.sh` copies `iqaudiocodec.state` to `/var/lib/alsa/asound.state`. The `alsa-restore.service` (from `alsa-utils`) loads it on every subsequent boot. Without it, JACK's ALSA driver times out.
+
+## Relationship to pi-gen-pistomp
+
+`../pi-gen-pistomp` is the original Debian-based image builder. This repo is a ground-up Arch rewrite. When in doubt about how a component should be configured, cross-reference pi-gen's `stage2/05-pistomp/` (service files, user setup, native builds) and `stage3/01-pistomp/` (app data, pedalboards). Key differences: we use pacman not apt, PKGBUILDs not bare `make install`, venvs not system Python, NetworkManager not wpa_supplicant, and system-packaged binaries (`/usr/bin/`) not `/opt/pistomp/bin/`.
+
 ## When editing
 
 - **Adding a system package?** Put it in the right numbered script. Audio packages → `02-audio.sh`, general system → `01-system.sh`.
