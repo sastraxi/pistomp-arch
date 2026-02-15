@@ -5,7 +5,7 @@ After=mod-amidithru.service jack.service network-online.target
 
 [Service]
 User=pistomp
-ExecStart=/opt/pistomp/venvs/touchosc2midi/bin/touchosc2midi
+ExecStart=/bin/sh /usr/mod/scripts/start_touchosc2midi.sh
 Restart=always
 RestartSec=1
 

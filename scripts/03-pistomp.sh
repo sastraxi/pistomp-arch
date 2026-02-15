@@ -256,16 +256,20 @@ install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
 # ---------- touchosc2midi start script ----------
 
 mkdir -p /usr/mod/scripts
-install -m 755 "${FILES}/start_touchosc2midi.sh" /usr/mod/scripts/ 2>/dev/null || true
+install -m 755 "${FILES}/start_touchosc2midi.sh" /usr/mod/scripts/
 
-# ---------- wifi hotspot scripts ----------
+# ---------- wifi hotspot and wifi check scripts ----------
 
 mkdir -p /usr/lib/pistomp-wifi
-for f in enable_wifi_hotspot.sh disable_wifi_hotspot.sh; do
+for f in enable_wifi_hotspot.sh disable_wifi_hotspot.sh wifi-check.sh; do
     if [[ -f "${FILES}/${f}" ]]; then
         install -m 755 "${FILES}/${f}" /usr/lib/pistomp-wifi/
     fi
 done
+
+# wifi-check: falls back to hotspot if WiFi is not connected at boot
+install -v -m 644 "${FILES}/wifi-check.service" "${SYSTEMD_DIR}/"
+ln -sf "${SYSTEMD_DIR}/wifi-check.service" "${WANTS}/"
 
 # ---------- cleanup build user ----------
 
