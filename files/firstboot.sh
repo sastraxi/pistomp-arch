@@ -32,6 +32,7 @@ if [[ -f "${CONF}" ]]; then
     # Timezone
     if [[ -n "${TIMEZONE:-}" ]]; then
         ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
+        timedatectl set-ntp true
     fi
 
     # SSH authorized key
