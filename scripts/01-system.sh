@@ -13,6 +13,7 @@ pacman -S --noconfirm --needed \
     openssh \
     rsync \
     htop \
+    nano \
     python python-pip \
     libgpiod \
     i2c-tools \
