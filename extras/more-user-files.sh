@@ -4,8 +4,6 @@
 
 pushd /home/pistomp/data/user-files >/dev/null
 
-sudo pacman -S 7zip
-
 pushd 'SFZ Instruments' >/dev/null
     wget https://freepats.zenvoid.org/Piano/UprightPianoKW/UprightPianoKW-SFZ-20220221.7z
     7z x UprightPianoKW-SFZ-20220221.7z

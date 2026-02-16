@@ -112,9 +112,11 @@ Optional services (installed but not enabled): `ttymidi`, `mod-midi-merger`, `mo
 /boot/pistomp.conf             # First-boot user config (FAT32)
 ```
 
-## RT Kernel
+## Performance
 
 The image ships with a standard (non-RT) kernel. See [docs/rt-kernel.md](docs/rt-kernel.md) for options — since Linux 6.12, PREEMPT_RT is a config flag, no patch needed.
+
+All supported pi-Stomp hardware has 4 homegeneous cores (i.e. A53/A72/A76). We reserve cores 2 and 3 for mod-host and jack to ensure smooth audio playback at all times, at the expense of pedalboard or mod-ui responsiveness.
 
 ---
 
