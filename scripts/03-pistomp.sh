@@ -61,7 +61,7 @@ export PATH="${PYENV_ROOT}/bin:${PYENV_ROOT}/shims:${PATH}"
 
 # Install Python build dependencies
 pacman -S --noconfirm --needed \
-    openssl zlib xz tk sqlite bzip2 readline libffi
+    openssl zlib xz tk sqlite bzip2 readline libffi 7zip
 
 # Build Python
 echo "==> Building Python ${PYTHON_VERSION}..."
@@ -187,6 +187,15 @@ ln -sf "/home/${FIRST_USER}/data/.pedalboards" "/home/${FIRST_USER}/.pedalboards
 # User files
 git clone --depth 1 -b "${USERFILES_BRANCH}" "${USERFILES_REPO}" \
     "/home/${FIRST_USER}/data/user-files"
+
+# Extras folder (utility scripts for pistomp user)
+EXTRAS_SRC="/root/pistomp-arch/extras"
+if [[ -d "${EXTRAS_SRC}" ]]; then
+    echo "==> Copying extras folder to /home/${FIRST_USER}/extras..."
+    cp -r "${EXTRAS_SRC}" "/home/${FIRST_USER}/extras"
+    # Make all scripts executable
+    find "/home/${FIRST_USER}/extras" -type f -name "*.sh" -exec chmod +x {} \;
+fi
 
 # LV2 plugins — must be pre-downloaded in cache/
 LV2_CACHE="/root/pistomp-arch/cache/lv2plugins.tar.gz"
