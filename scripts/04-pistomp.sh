@@ -293,11 +293,12 @@ ln -sf "${SYSTEMD_DIR}/wifi-check.service" "${WANTS}/"
 
 echo "==> Installing MOTD..."
 {
+    echo ""
     bash "${FILES}/display-pistomp-logo"
     echo "  Build date:    $(date '+%Y-%m-%d %H:%M:%S %Z')"
     echo "  Kernel:        $(pacman -Q linux-rpi 2>/dev/null || pacman -Q linux-rpi-rt 2>/dev/null || echo 'unknown')"
     echo ""
-    echo "  Check out /home/pistomp/extras/ for more."
+    echo "  Tweaks and additional instruments available in ~/extras"
     echo ""
 } > /etc/motd
 

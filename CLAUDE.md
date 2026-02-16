@@ -17,7 +17,7 @@ build.sh / build-docker.sh   # Image builder (pacstrap + arch-chroot)
 config.sh                    # All version pins, URLs, repo refs — single source of truth
 scripts/
   00-base.sh                 # Pacman keyring, locale, users
-  01-rt-kernel.sh            # Compiles a realtime kernel
+  01-rt-kernel.sh            # Uses a precompiled RT kernel, if present
   02-system.sh               # Networking, SSH, GPIO, authbind
   03-audio.sh                # JACK2, LV2, ALSA, RT limits
   04-pistomp.sh              # pyenv, uv, PKGBUILDs, venvs, services, app data

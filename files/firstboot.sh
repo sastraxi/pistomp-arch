@@ -10,8 +10,8 @@ if [[ -f "${CONF}" ]]; then
     source "${CONF}"
 
     # WiFi — create the connection profile so NM connects automatically
+    iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
     if [[ -n "${WIFI_SSID:-}" ]]; then
-        iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
         nmcli connection add type wifi ifname wlan0 con-name "preconfigured" \
             ssid "${WIFI_SSID}" \
             wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PASSWORD}" \
