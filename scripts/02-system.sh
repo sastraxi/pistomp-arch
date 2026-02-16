@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 01-system: System packages and networking"
+echo "==> 02-system: System packages and networking"
 
 # ---------- core packages ----------
 
@@ -91,4 +91,4 @@ fi
 BASHRC
 fi
 
-echo "==> 01-system: Done"
+echo "==> 02-system: Done"

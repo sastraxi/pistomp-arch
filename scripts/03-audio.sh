@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 02-audio: Audio stack"
+echo "==> 03-audio: Audio stack"
 
 # ---------- audio packages ----------
 
@@ -44,4 +44,4 @@ install -m 644 /root/pistomp-arch/files/alsa-base.conf /etc/modprobe.d/alsa-base
 mkdir -p /etc/sysctl.d
 install -m 644 /root/pistomp-arch/files/sysctl.d/90-audio.conf /etc/sysctl.d/90-audio.conf
 
-echo "==> 02-audio: Done"
+echo "==> 03-audio: Done"

@@ -1,0 +1,18 @@
+# Downloaded from upstream at build time
+PKGBUILD*
+*.txt
+*.preset
+*.install
+archarm.diffconfig
+0001-*.patch
+
+# makepkg build artifacts
+src/
+pkg/
+*.pkg.tar.*
+*.tar.gz
+*.log
+
+# Temp files
+*.orig
+*.rej

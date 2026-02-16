@@ -17,10 +17,11 @@ build.sh / build-docker.sh   # Image builder (pacstrap + arch-chroot)
 config.sh                    # All version pins, URLs, repo refs — single source of truth
 scripts/
   00-base.sh                 # Pacman keyring, locale, users
-  01-system.sh               # Networking, SSH, GPIO, authbind
-  02-audio.sh                # JACK2, LV2, ALSA, RT limits
-  03-pistomp.sh              # pyenv, uv, PKGBUILDs, venvs, services, app data
-  04-cleanup.sh              # Shrink image
+  01-rt-kernel.sh            # Compiles a realtime kernel
+  02-system.sh               # Networking, SSH, GPIO, authbind
+  03-audio.sh                # JACK2, LV2, ALSA, RT limits
+  04-pistomp.sh              # pyenv, uv, PKGBUILDs, venvs, services, app data
+  05-cleanup.sh              # Shrink image
 pkgbuilds/                   # Pacman packages for C components (mod-host, amidithru, etc.)
 files/                       # Static config files, systemd units, pacman configs, boot scripts
 patches/                     # Patches applied during build (mod-ui, etc.)
@@ -34,7 +35,7 @@ cache/                       # Downloaded LV2 plugins tarball (gitignored)
 
 2. **Isolated Python.** pyenv pins Python 3.11 at `/opt/pistomp/pyenv/`. Each app gets its own venv in `/opt/pistomp/venvs/<app>/`. System Python is untouched. Service files reference venv Python directly.
 
-3. **Scripts are sequential and idempotent.** `00-base.sh` → `04-cleanup.sh` run in order inside chroot. Each script should be safe to re-run (use `--needed`, check before creating, etc.).
+3. **Scripts are sequential and idempotent.** `00-base.sh` → `05-pistomp.sh` run in order inside chroot. Each script should be safe to re-run (use `--needed`, check before creating, etc.).
 
 4. **config.sh is the single source of truth** for versions, repo URLs, branches, and paths. Scripts read from environment variables — don't hardcode these values in scripts.
 
@@ -86,7 +87,7 @@ mod-ui is installed with `pip install -e` (editable). This means `data_files` fr
 mod-ui's `modtools/utils.py` loads `libmod_utils.so` via ctypes. This C library (`utils/` directory) requires a separate `make` step — `pip install` does not build it. The editable install means the fallback path `../utils/libmod_utils.so` resolves correctly from the source tree.
 
 ### WiFi interface renamed to wlan0 via udev
-Arch uses predictable names (`wld0`), but pi-stomp hardcodes `wlan0`. A udev rule in `01-system.sh` renames the WiFi interface to `wlan0`. The NetworkManager connection must be named `preconfigured` (what pi-stomp's `wifi.py` expects).
+Arch uses predictable names (`wld0`), but pi-stomp hardcodes `wlan0`. A udev rule in `02-system.sh` renames the WiFi interface to `wlan0`. The NetworkManager connection must be named `preconfigured` (what pi-stomp's `wifi.py` expects).
 
 ### pyliblo is broken; use pyliblo3
 `pyliblo` 0.10.0 is incompatible with modern liblo and Cython 3.x. Use `pyliblo3` (maintained fork) with `Cython<3.1` (3.1 removed the `long` builtin). touchosc2midi must be installed `--no-deps` to avoid pulling broken pyliblo.
@@ -110,8 +111,8 @@ This repo builds the image that ultimately runs on the pi-Stomp hardware, runnin
 
 ## When editing
 
-- **Adding a system package?** Put it in the right numbered script. Audio packages → `02-audio.sh`, general system → `01-system.sh`.
-- **Adding a native C component?** Create a PKGBUILD in `pkgbuilds/`, build it in `03-pistomp.sh`.
-- **Adding a Python app?** Create a venv in `03-pistomp.sh`, add a service file in `files/`.
+- **Adding a system package?** Put it in the right numbered script. Audio packages → `03-audio.sh`, general system → `02-system.sh`.
+- **Adding a native C component?** Create a PKGBUILD in `pkgbuilds/`, build it in `04-pistomp.sh`.
+- **Adding a Python app?** Create a venv in `04-pistomp.sh`, add a service file in `files/`.
 - **Changing a version or repo?** Edit `config.sh`, not the scripts.
 - **Adding a service?** Install the unit file, then symlink to enable (see chroot limitation above). Check the dependency chain.

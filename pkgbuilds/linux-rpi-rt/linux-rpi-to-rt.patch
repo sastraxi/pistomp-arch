@@ -1,0 +1,127 @@
+--- PKGBUILD.orig	2026-02-15 21:49:18
++++ PKGBUILD	2026-02-15 21:52:06
+@@ -5,13 +5,13 @@
+ # Contributer: Jan Alexander Steffens (heftig) <heftig@archlinux.org>
+ # Contributer: Ben Schneider <ben@bens.haus>
+ 
+-pkgbase=linux-rpi
++pkgbase=linux-rpi-rt
+ _commit=9ea9c76f2de058be8cee1391ac877ebdb942943e
+ _srcname=linux-${_commit}
+ _kernelname=${pkgbase#linux}
+ pkgver=6.18.10
+ pkgrel=1
+-pkgdesc='Linux'
++pkgdesc='Linux with PREEMPT_RT (realtime) for Raspberry Pi'
+ url="https://github.com/raspberrypi/linux"
+ arch=(armv7h aarch64)
+ license=(GPL-2.0-only)
+@@ -28,6 +28,7 @@
+         0001-Make-proc-cpuinfo-consistent-on-arm64-and-arm.patch
+         linux.preset
+         archarm.diffconfig
++        archarm-rt.diffconfig
+ )
+ sha256sums=('c80c9ffae3bf0a698bf5c207bf4ed878cd538d576b03e6f1dab105d4082a987a'
+             '7a84795f7c7a39e8384356ef51f47d5ddac0e44921d1bd2cbf8db7de88810ef5'
+@@ -35,7 +36,8 @@
+             'ff6d10ac64512b0da204a9ce43892ef28bc63c0597888df606af3db279d547de'
+             '29956d87ef394fef3dbd9e363391ba260b08369e10019be25019e311781c6476'
+             '184ee4f680eb32c99f159773b711cff200426cec7a565bd04711558ca74c381e'
+-            '3f3df16f49bd5cffd92afa2963cdd9672036b81bffec11237c3a662554915bb3')
++            '3f3df16f49bd5cffd92afa2963cdd9672036b81bffec11237c3a662554915bb3'
++            'SKIP')
+ 
+ # setup vars
+ if [[ $CARCH == "armv7h" ]]; then
+@@ -60,10 +62,11 @@
+   sed -i '/^CONFIG_LOCALVERSION=/d' ./arch/arm64/configs/bcm2711_defconfig
+   sed -i '/^CONFIG_LOCALVERSION=/d' ./arch/arm/configs/bcm2709_defconfig
+ 
+-  echo "Applying custom options to rpi defconfig"
++  echo "Applying custom options to rpi defconfig with RT support"
+   if [[ $CARCH == "armv7h" ]]; then
+     make bcm2709_defconfig
+     cat ../archarm.diffconfig >> .config
++    cat ../archarm-rt.diffconfig >> .config
+     # https://archlinuxarm.org/forum/viewtopic.php?f=23&t=16373
+     scripts/config --enable CONFIG_BCM2835_THERMAL
+ 
+@@ -74,13 +77,34 @@
+     scripts/config --enable CONFIG_LRU_GEN_ENABLED
+     make olddefconfig
+   else
+-    make bcm2711_defconfig
++    # ARM64 (Pi 4/5) - use RT defconfig if available, otherwise enable manually
++    if [[ -f arch/arm64/configs/bcm2711_rt_defconfig ]]; then
++      echo "Using bcm2711_rt_defconfig (official RT config)"
++      make bcm2711_rt_defconfig
++    else
++      echo "No RT defconfig found, enabling RT manually on bcm2711_defconfig"
++      make bcm2711_defconfig
++      scripts/config --enable CONFIG_PREEMPT_RT
++    fi
+     cat ../archarm.diffconfig >> .config
++    cat ../archarm-rt.diffconfig >> .config
++    make olddefconfig
++  fi
++
++  # Verify RT is enabled
++  if ! grep -q "CONFIG_PREEMPT_RT=y" .config; then
++    echo "WARNING: CONFIG_PREEMPT_RT is not enabled!"
++    echo "Forcing RT preemption..."
++    scripts/config --enable CONFIG_PREEMPT_RT
+     make olddefconfig
+   fi
+ 
+   make -s kernelrelease > version
+-  echo "Prepared $pkgbase version $(<version)"
++  echo "Prepared $pkgbase version $(<version) with PREEMPT_RT"
++
++  # Show RT status
++  echo "RT Preemption status:"
++  grep "CONFIG_PREEMPT" .config | grep -v "^#" || echo "  (no PREEMPT config found)"
+ }
+ 
+ build() {
+@@ -90,7 +114,7 @@
+ }
+ 
+ _package() {
+-  pkgdesc="Linux kernel and modules (RPi Foundation fork)"
++  pkgdesc="Linux kernel with PREEMPT_RT and modules (RPi Foundation fork)"
+   depends=(
+     coreutils
+     firmware-raspberrypi
+@@ -104,15 +128,17 @@
+   )
+   provides=(
+     linux="${pkgver}"
++    linux-rpi="${pkgver}"
+     KSMBD-MODULE
+     WIREGUARD-MODULE
+   )
+   conflicts=(
+     linux
++    linux-rpi
+     linux-rpi-16k
+     uboot-raspberrypi
+   )
+-  install=${pkgname}.install
++  install=${pkgbase}.install
+   backup=(
+     boot/config.txt
+     boot/cmdline.txt
+@@ -163,9 +189,9 @@
+ }
+ 
+ _package-headers() {
+-  pkgdesc="Headers and scripts for building modules for Linux kernel"
+-  provides=("linux-headers=${pkgver}")
+-  conflicts=('linux-headers' 'linux-rpi-16k-headers')
++  pkgdesc="Headers and scripts for building modules for Linux RT kernel"
++  provides=("linux-headers=${pkgver}" "linux-rpi-headers=${pkgver}")
++  conflicts=('linux-headers' 'linux-rpi-headers' 'linux-rpi-16k-headers')
+ 
+   cd ${_srcname}
+   local builddir="$pkgdir/usr/lib/modules/$(<version)/build"

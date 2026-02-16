@@ -83,7 +83,7 @@ None are directly usable for Arch ARM:
 
 ## Audio-Tuned System Configuration
 
-Beyond the kernel, these settings matter for low-latency audio. Most are already configured in `scripts/02-audio.sh`.
+Beyond the kernel, these settings matter for low-latency audio. Most are already configured in `scripts/03-audio.sh`.
 
 ### Already configured in pistompOS-arch
 

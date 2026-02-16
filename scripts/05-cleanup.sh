@@ -1,17 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 04-cleanup: Cleaning up"
+echo "==> 05-cleanup: Cleaning up"
 
-# Debug: verify service files survived from 03-pistomp.sh
+# ---------- remove build user ----------
+
+userdel -r builduser 2>/dev/null || true
+rm -f /etc/sudoers.d/builduser
+
+# Debug: verify service files survived from 04-pistomp.sh
 echo "==> [debug] Service files before cleanup:"
 ls -la /usr/lib/systemd/system/{jack,mod-host,mod-ui,browsepy,mod-amidithru,mod-ala-pi-stomp,firstboot}.service 2>&1
 
-# ---------- remove build dependencies (optional) ----------
+# ---------- remove build dependencies ----------
 
-# Keep base-devel for now — some pip packages with C extensions may
-# need recompilation on the device. Remove manually if not needed:
-#   pacman -Rns $(pacman -Qqdt) --noconfirm
+# Remove kernel build dependencies (not needed in final image)
+echo "==> Removing kernel build dependencies..."
+pacman -Rns --noconfirm base-devel bc kmod inetutils xmlto docbook-xsl git patch || true
+
+# Remove any orphaned dependencies
+pacman -Rns $(pacman -Qqdt) --noconfirm 2>/dev/null || true
 
 # ---------- clear package cache ----------
 
@@ -20,9 +28,11 @@ pacman -Scc --noconfirm
 # ---------- clear temporary files ----------
 
 # Preserve cache/ (bind-mounted from host) — only delete project copies
+# Note: pkgbuilds/ includes kernel sources which can be 500MB+
 rm -rf /root/pistomp-arch/files
 rm -rf /root/pistomp-arch/pkgbuilds
 rm -rf /root/pistomp-arch/patches
+rm -rf /root/pistomp-arch/scripts
 rm -rf /tmp/build-*
 rm -rf /tmp/mod-ui
 rm -rf /var/log/journal/*
@@ -54,5 +64,5 @@ rm -rf /opt/pistomp/pyenv/sources/*
 echo "==> [debug] Service files after cleanup:"
 ls -la /usr/lib/systemd/system/{jack,mod-host,mod-ui,browsepy,mod-amidithru,mod-ala-pi-stomp,firstboot}.service 2>&1
 
-echo "==> 04-cleanup: Done"
+echo "==> 05-cleanup: Done"
 echo "==> Build complete!"

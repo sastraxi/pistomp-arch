@@ -150,6 +150,7 @@ install -m 644 "${SCRIPT_DIR}/files/pacman-alarm.conf" "${ROOT_MNT}/etc/pacman.c
 # Copy project files into chroot
 log "Copying project files into chroot..."
 mkdir -p "${ROOT_MNT}/root/pistomp-arch"
+cp "${SCRIPT_DIR}/config.sh" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/files" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/pkgbuilds" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/patches" "${ROOT_MNT}/root/pistomp-arch/"
@@ -160,10 +161,11 @@ mount --bind "${SCRIPT_DIR}/cache" "${ROOT_MNT}/root/pistomp-arch/cache"
 # ---------- run build scripts ----------
 
 run_in_chroot "scripts/00-base.sh"
-run_in_chroot "scripts/01-system.sh"
-run_in_chroot "scripts/02-audio.sh"
-run_in_chroot "scripts/03-pistomp.sh"
-run_in_chroot "scripts/04-cleanup.sh"
+run_in_chroot "scripts/01-rt-kernel.sh"
+run_in_chroot "scripts/02-system.sh"
+run_in_chroot "scripts/03-audio.sh"
+run_in_chroot "scripts/04-pistomp.sh"
+run_in_chroot "scripts/05-cleanup.sh"
 
 # ---------- finalize ----------
 

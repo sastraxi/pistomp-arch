@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 03-pistomp: Application stack"
+echo "==> 04-pistomp: Application stack"
 
 PISTOMP_DIR="/opt/pistomp"
 PYENV_ROOT="${PISTOMP_DIR}/pyenv"
@@ -21,10 +21,6 @@ UV_BIN="${PISTOMP_DIR}/bin/uv"
 # ---------- native PKGBUILDs ----------
 
 echo "==> Building native PKGBUILDs..."
-
-# Create a build user (makepkg refuses to run as root)
-useradd -m -s /bin/bash builduser 2>/dev/null || true
-echo "builduser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builduser
 
 build_pkg() {
     local pkg="$1"
@@ -286,9 +282,4 @@ done
 install -v -m 644 "${FILES}/wifi-check.service" "${SYSTEMD_DIR}/"
 ln -sf "${SYSTEMD_DIR}/wifi-check.service" "${WANTS}/"
 
-# ---------- cleanup build user ----------
-
-userdel -r builduser 2>/dev/null || true
-rm -f /etc/sudoers.d/builduser
-
-echo "==> 03-pistomp: Done"
+echo "==> 04-pistomp: Done"
