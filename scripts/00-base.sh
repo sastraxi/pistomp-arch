@@ -55,6 +55,7 @@ usermod -aG jack,gpio "${FIRST_USER}"
 # ---------- boot config ----------
 
 install -m 644 /root/pistomp-arch/files/config.txt /boot/config.txt
+install -m 644 /root/pistomp-arch/files/cmdline.txt /boot/cmdline.txt
 
 # ---------- fstab ----------
 

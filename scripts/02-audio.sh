@@ -39,4 +39,9 @@ chown jack:jack /etc/jackdrc
 
 install -m 644 /root/pistomp-arch/files/alsa-base.conf /etc/modprobe.d/alsa-base.conf
 
+# ---------- sysctl tuning ----------
+
+mkdir -p /etc/sysctl.d
+install -m 644 /root/pistomp-arch/files/sysctl.d/90-audio.conf /etc/sysctl.d/90-audio.conf
+
 echo "==> 02-audio: Done"
