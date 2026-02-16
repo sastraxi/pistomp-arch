@@ -4,16 +4,35 @@ Builds a bootable Arch Linux ARM image for [pi-Stomp](https://github.com/TreeFal
 
 Supports Raspberry Pi 3, 4, and 5.
 
+## Prerequisites
+
+Requires Docker with [buildx](https://docs.docker.com/build/buildx/install/).
+
+On macOS with Homebrew: `brew install docker-buildx` and add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`.
+
+
 ## Quick Start
 
+### Build RT Kernel (optional)
+
 ```bash
-# Build image (Docker, works on macOS/Linux)
+./build-rt-kernel-docker.sh
+
+# Output: cache/linux-rpi-rt-<version>-aarch64.pkg.tar.xz
+#         cache/linux-rpi-rt-headers-<version>-aarch64.pkg.tar.xz
+```
+
+Ensure your docker server has plenty of RAM and CPU available; this took about 25 minutes on an M1 Pro.
+
+### Build Image
+
+```bash
 ./build-docker.sh
 
 # Output: deploy/pistompOS-arch-<date>.img.zst
 ```
 
-Requires Docker with [buildx](https://docs.docker.com/build/buildx/install/). On macOS with Homebrew: `brew install docker-buildx` and add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`. First run downloads ~500MB of base OS + LV2 plugins into `cache/`.
+First run downloads ~500MB of base OS + LV2 plugins into `cache/`.
 
 ## Flashing
 
@@ -31,6 +50,7 @@ SSH_AUTHORIZED_KEY="ssh-ed25519 AAAA..."
 # HOSTNAME="pistomp"
 # TIMEZONE="US/Central"
 # USER_PASSWORD="pistomp"
+# etc.
 ```
 
 Insert the SD card and power on. First boot takes a couple of minutes.
@@ -43,7 +63,8 @@ On first boot, `firstboot.service` runs automatically and:
 2. Expands the root partition to fill the SD card
 3. Copies ALSA mixer state for the IQAudio DAC
 4. Sets pi-stomp hardware version (v2.0 for Pi 3, v3.0 for Pi 4/5)
-5. Reboots
+5. Copies JACK configuration from `pistomp.conf` to `/etc/default/jack`
+6. Reboots
 
 After the reboot, the full service chain starts: JACK → mod-host → mod-ui → pi-stomp. The web UI is available on port 80.
 
@@ -68,7 +89,7 @@ The WiFi interface is renamed to `wlan0` via udev rule (Arch defaults to `wld0`,
 
 ## What's in the Image
 
-- **Arch Linux ARM** with stock `linux-rpi` kernel
+- **Arch Linux ARM** with either stock `linux-rpi` kernel or `linux-rpi-rt` kernel (if built)
 - **JACK2** + `jack-example-tools` (from pacman)
 - **lilv/serd/sord/sratom/lv2** (from pacman, including Python bindings)
 - **mod-host**, **mod-ui**, **browsepy**, **amidithru**, **ttymidi**, **mod-midi-merger**
@@ -112,12 +133,6 @@ Optional services (installed but not enabled): `ttymidi`, `mod-midi-merger`, `mo
 /boot/pistomp.conf             # First-boot user config (FAT32)
 ```
 
-## Performance
-
-The image ships with a standard (non-RT) kernel. See [docs/rt-kernel.md](docs/rt-kernel.md) for options — since Linux 6.12, PREEMPT_RT is a config flag, no patch needed.
-
-All supported pi-Stomp hardware has 4 homegeneous cores (i.e. A53/A72/A76). We reserve cores 2 and 3 for mod-host and jack to ensure smooth audio playback at all times, at the expense of pedalboard or mod-ui responsiveness.
-
 ---
 
 ## How the Build Works
@@ -126,7 +141,7 @@ The build is two-stage: **host-side image setup** followed by **chroot configura
 
 1. **Image creation (host)** — `build.sh` creates a raw `.img` file, partitions it (FAT32 boot + ext4 root), attaches it as a loop device via `losetup`/`kpartx`, and mounts the partitions.
 2. **pacstrap (host)** — Installs a fresh Arch Linux ARM rootfs directly from ALARM mirrors into the mounted image. No pre-built tarball needed.
-3. **Chroot scripts (target)** — `arch-chroot` enters the rootfs and runs the numbered scripts (`00-base.sh` through `04-cleanup.sh`) sequentially. These configure the system as if running on the Pi itself.
+3. **Chroot scripts (target)** — `arch-chroot` enters the rootfs and runs the numbered scripts (`00-base.sh` through `05-pistomp.sh`) sequentially. These configure the system as if running on the Pi itself.
 4. **Finalize (host)** — Unmounts everything, detaches the loop device, and compresses the image with zstd.
 
 When running via `build-docker.sh`, the entire process happens inside a privileged Docker container (an aarch64 Arch Linux image with `arch-install-scripts`). The host only needs Docker.
@@ -134,10 +149,11 @@ When running via `build-docker.sh`, the entire process happens inside a privileg
 | Script | Phase |
 |--------|-------|
 | `00-base.sh` | Pacman init, kernel, locale, users |
-| `01-system.sh` | Networking, SSH, GPIO, authbind |
-| `02-audio.sh` | JACK2, LV2 stack, ALSA config, RT limits |
-| `03-pistomp.sh` | pyenv, uv, PKGBUILDs, venvs, app data, services |
-| `04-cleanup.sh` | Clear caches, remove build artifacts |
+| `01-rt-kernel.sh` | Uses a precompiled realtime kernel |
+| `02-system.sh` | Networking, SSH, GPIO, authbind |
+| `03-audio.sh` | JACK2, LV2 stack, ALSA config, RT limits |
+| `04-pistomp.sh` | pyenv, uv, PKGBUILDs, venvs, app data, services |
+| `05-cleanup.sh` | Clear caches, remove build artifacts |
 
 ## Direct Build (Linux only)
 

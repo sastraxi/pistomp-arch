@@ -6,7 +6,7 @@ pkgdesc="FluidSynth .so.2 compatibility shim for prebuilt LV2 plugins"
 arch=('aarch64')
 url="https://github.com/FluidSynth/fluidsynth"
 license=('LGPL2.1')
-depends=('fluidsynth')
+depends=('fluidsynth-headless')
 makedepends=()
 
 # This package creates a .so.2 symlink so that prebuilt LV2 plugins

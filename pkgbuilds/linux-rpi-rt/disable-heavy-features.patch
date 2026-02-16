@@ -1,0 +1,22 @@
+--- PKGBUILD	2026-02-16 10:00:00
++++ PKGBUILD	2026-02-16 10:05:00
+@@ -81,6 +81,19 @@
+   # Show RT status
+   echo "RT Preemption status:"
+   grep "CONFIG_PREEMPT" .config | grep -v "^#" || echo "  (no PREEMPT config found)"
++
++  # Disable heavy features to reduce build time (20-30% faster compilation)
++  echo "Disabling unnecessary features for faster compilation..."
++  scripts/config --disable DEBUG_INFO
++  scripts/config --disable DEBUG_INFO_BTF
++  scripts/config --disable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
++  scripts/config --disable GDB_SCRIPTS
++  scripts/config --disable XFS_FS
++  scripts/config --disable BTRFS_FS
++  scripts/config --disable F2FS_FS
++  scripts/config --disable NILFS2_FS
++  scripts/config --disable STAGING
++  make olddefconfig
+ }
+
+ build() {

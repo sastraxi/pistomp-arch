@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 03-pistomp: Application stack"
+echo "==> 04-pistomp: Application stack"
 
 PISTOMP_DIR="/opt/pistomp"
 PYENV_ROOT="${PISTOMP_DIR}/pyenv"
@@ -22,9 +22,11 @@ UV_BIN="${PISTOMP_DIR}/bin/uv"
 
 echo "==> Building native PKGBUILDs..."
 
-# Create a build user (makepkg refuses to run as root)
-useradd -m -s /bin/bash builduser 2>/dev/null || true
-echo "builduser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builduser
+echo "==> Installing build tools for PKGBUILDs..."
+pacman -S --needed --noconfirm base-devel
+
+echo "==> Enabling parallel compilation..."
+sed -i 's/^#MAKEFLAGS=.*/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
 
 build_pkg() {
     local pkg="$1"
@@ -45,7 +47,8 @@ build_pkg "sfizz-pistomp"
 build_pkg "amidithru"
 build_pkg "mod-midi-merger"
 build_pkg "mod-ttymidi"
-build_pkg "libfluidsynth2-compat"
+build_pkg "fluidsynth-headless"    # builds without SDL (no X11 deps)
+build_pkg "libfluidsynth2-compat"  # just symlinks -2 to -3
 
 # lg must be built before pyenv is set up, so python3 resolves to
 # /usr/bin/python3 (system 3.14) and the SWIG module installs there.
@@ -63,7 +66,7 @@ export PATH="${PYENV_ROOT}/bin:${PYENV_ROOT}/shims:${PATH}"
 pacman -S --noconfirm --needed \
     openssl zlib xz tk sqlite bzip2 readline libffi 7zip
 
-# Build Python
+# Build Python (3.11+ already uses parallel compilation by default)
 echo "==> Building Python ${PYTHON_VERSION}..."
 pyenv install "${PYTHON_VERSION}"
 pyenv global "${PYTHON_VERSION}"
@@ -286,9 +289,17 @@ done
 install -v -m 644 "${FILES}/wifi-check.service" "${SYSTEMD_DIR}/"
 ln -sf "${SYSTEMD_DIR}/wifi-check.service" "${WANTS}/"
 
-# ---------- cleanup build user ----------
+# ---------- MOTD (pistomp logo) ----------
 
-userdel -r builduser 2>/dev/null || true
-rm -f /etc/sudoers.d/builduser
+echo "==> Installing MOTD..."
+{
+    echo ""
+    bash "${FILES}/display-pistomp-logo"
+    echo "  Build date:    $(date '+%Y-%m-%d %H:%M:%S %Z')"
+    echo "  Kernel:        $(pacman -Q linux-rpi 2>/dev/null || pacman -Q linux-rpi-rt 2>/dev/null || echo 'unknown')"
+    echo ""
+    echo "  Tweaks and additional instruments available in ~/extras"
+    echo ""
+} > /etc/motd
 
-echo "==> 03-pistomp: Done"
+echo "==> 04-pistomp: Done"

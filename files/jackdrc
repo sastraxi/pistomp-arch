@@ -1,4 +1,19 @@
 #!/bin/sh
-# Pin JACK to isolated CPU cores 2-3 for realtime performance
-# (isolcpus=2,3 kernel parameter reserves these cores)
-exec taskset -c 2,3 /usr/bin/jackd -t 2000 -R -P 95 -d alsa -d hw:0 -r 48000 -p 256 -n 2 -X seq -s
+# JACK with realtime priority (RT scheduler manages CPU allocation)
+set -e
+
+# Load user configuration from /etc/default/jack (set via /boot/pistomp.conf)
+if [ ! -f /etc/default/jack ]; then
+    echo "ERROR: /etc/default/jack not found. Did firstboot.sh run?" >&2
+    exit 1
+fi
+
+. /etc/default/jack
+
+# Verify required settings
+if [ -z "${JACK_SAMPLE_RATE}" ] || [ -z "${JACK_PERIOD}" ]; then
+    echo "ERROR: JACK_SAMPLE_RATE or JACK_PERIOD not set in /etc/default/jack" >&2
+    exit 2
+fi
+
+exec /usr/bin/jackd -t 2000 -R -P 75 -d alsa -d hw:0 -r "${JACK_SAMPLE_RATE}" -p "${JACK_PERIOD}" -n 2 -X seq -s

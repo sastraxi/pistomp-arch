@@ -14,7 +14,7 @@ sha256sums=('SKIP')
 build() {
     cd mod-midi-merger
     cmake -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-    cmake --build build
+    cmake --build build --parallel
 }
 
 package() {

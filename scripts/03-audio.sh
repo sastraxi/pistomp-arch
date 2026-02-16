@@ -1,20 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 02-audio: Audio stack"
+echo "==> 03-audio: Audio stack"
 
 # ---------- audio packages ----------
 
 pacman -S --noconfirm --needed \
     jack2 \
     jack-example-tools \
+    rtirq \
     lilv python-lilv \
     serd sord sratom lv2 \
     alsa-utils alsa-lib \
     libsamplerate \
     libsndfile \
     fftw \
-    fluidsynth \
     liblo
 
 # ---------- realtime audio config ----------
@@ -44,4 +44,9 @@ install -m 644 /root/pistomp-arch/files/alsa-base.conf /etc/modprobe.d/alsa-base
 mkdir -p /etc/sysctl.d
 install -m 644 /root/pistomp-arch/files/sysctl.d/90-audio.conf /etc/sysctl.d/90-audio.conf
 
-echo "==> 02-audio: Done"
+# ---------- rtirq service ----------
+
+# Enable rtirq for RT kernel (no-op on non-RT kernels)
+ln -sf /usr/lib/systemd/system/rtirq.service /etc/systemd/system/multi-user.target.wants/rtirq.service
+
+echo "==> 03-audio: Done"

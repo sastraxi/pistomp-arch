@@ -1,0 +1,57 @@
+# Minimal headless FluidSynth (no SDL, no GUI, no X11)
+# Based on Arch Linux ARM fluidsynth 2.5.2-1 with SDL3 disabled
+pkgname=fluidsynth-headless
+pkgver=2.5.2
+pkgrel=1
+pkgdesc='A real-time software synthesizer based on the SoundFont 2 specifications (headless, no SDL/X11)'
+arch=('aarch64')
+url='https://www.fluidsynth.org/'
+_url='https://github.com/FluidSynth/fluidsynth'
+license=('LGPL-2.1-or-later')
+groups=('pro-audio')
+depends=(
+    'gcc-libs'
+    'glibc'
+    'alsa-lib' 'libasound.so=2-64'
+    'dbus' 'libdbus-1.so=3-64'
+    'glib2' 'libglib-2.0.so=0-64' 'libgmodule-2.0.so=0-64'
+    'jack' 'libjack.so=0-64'
+    'libpipewire' 'libpipewire-0.3.so=0-64'
+    'libpulse' 'libpulse-simple.so=0-64'
+    'libsndfile' 'libsndfile.so=1-64'
+    'portaudio' 'libportaudio.so=2-64'
+    'readline' 'libreadline.so=8-64'
+    'systemd-libs' 'libsystemd.so=0-64'
+)
+makedepends=('cmake')
+provides=(
+    'fluidsynth=2.5.2'
+    'libfluidsynth.so=3-64'
+    'soundfont-synthesizer'
+)
+conflicts=('fluidsynth')
+source=("fluidsynth-${pkgver}.tar.gz::${_url}/archive/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cmake -B build -S "fluidsynth-${pkgver}" \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=None \
+        -DLIB_SUFFIX="" \
+        -Denable-sdl3=OFF \
+        -Denable-sdl2=OFF \
+        -Denable-ladspa=ON \
+        -Denable-portaudio=ON \
+        -Denable-readline=ON \
+        -Denable-jack=ON \
+        -Denable-alsa=ON \
+        -Denable-pulseaudio=ON \
+        -Denable-pipewire=ON \
+        -Denable-libsndfile=ON \
+        -Denable-dbus=ON
+    cmake --build build --parallel
+}
+
+package() {
+    DESTDIR="${pkgdir}" cmake --install build
+}

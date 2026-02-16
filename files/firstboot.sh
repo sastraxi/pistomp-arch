@@ -10,8 +10,8 @@ if [[ -f "${CONF}" ]]; then
     source "${CONF}"
 
     # WiFi — create the connection profile so NM connects automatically
+    iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
     if [[ -n "${WIFI_SSID:-}" ]]; then
-        iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
         nmcli connection add type wifi ifname wlan0 con-name "preconfigured" \
             ssid "${WIFI_SSID}" \
             wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PASSWORD}" \
@@ -61,6 +61,13 @@ fi
 if [[ -f /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state ]]; then
     cp /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state /var/lib/alsa/asound.state
 fi
+
+# JACK audio configuration
+cat > /etc/default/jack <<EOF
+# JACK audio settings (configured from /boot/pistomp.conf)
+JACK_SAMPLE_RATE="${JACK_SAMPLE_RATE:-48000}"
+JACK_PERIOD="${JACK_PERIOD:-256}"
+EOF
 
 # Fix ownership
 chown -R pistomp:pistomp /home/pistomp/

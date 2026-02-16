@@ -37,10 +37,14 @@ build() {
         -DSFIZZ_JACK=OFF \
         -DSFIZZ_RENDER=ON \
         -DSFIZZ_USE_SYSTEM_LV2=ON \
-        -DSFIZZ_USE_SYSTEM_LIBSNDFILE=ON \
         -DSFIZZ_USE_SYSTEM_ABSEIL=OFF \
         -DSFIZZ_USE_SYSTEM_PUGIXML=OFF
-    cmake --build build-headless
+
+    # Limit parallelism to avoid OOM (C++ templates are memory-hungry)
+    # Use at most 4 jobs or half of available cores, whichever is less
+    local jobs=$(nproc)
+    [[ $jobs -gt 4 ]] && jobs=4
+    cmake --build build-headless --parallel $jobs
 }
 
 package() {
