@@ -37,6 +37,9 @@ su builduser -c "ls -la '${RT_KERNEL_DIR}'" || {
 su builduser -c "cd '${RT_KERNEL_DIR}' && makepkg -s --noconfirm"
 
 # Install RT kernel (replaces stock linux-rpi due to conflicts)
+echo "==> Removing stock linux-rpi kernel to avoid conflicts..."
+pacman -R --noconfirm linux-rpi || echo "linux-rpi not installed, continuing..."
+
 echo "==> Installing RT kernel packages..."
 pacman -U --noconfirm "${RT_KERNEL_DIR}"/linux-rpi-rt-*.pkg.tar.*
 
