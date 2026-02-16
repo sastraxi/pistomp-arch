@@ -1,0 +1,26 @@
+--- a/plugins/lv2/sfizz.ttl.in
++++ b/plugins/lv2/sfizz.ttl.in
+@@ -7,6 +7,7 @@
+ @prefix midi:    <http://lv2plug.in/ns/ext/midi#> .
+ @prefix opts:    <http://lv2plug.in/ns/ext/options#> .
+ @prefix param:   <http://lv2plug.in/ns/ext/parameters#> .
++@prefix mod:     <http://moddevices.com/ns/mod#> .
+ @prefix patch:   <http://lv2plug.in/ns/ext/patch#> .
+ @prefix pg:      <http://lv2plug.in/ns/ext/port-groups#> .
+ @prefix pprop:   <http://lv2plug.in/ns/ext/port-props#> .
+@@ -53,6 +54,7 @@
+
+ <@LV2_PLUGIN_URI@:sfzfile>
+   a lv2:Parameter ;
++  mod:fileTypes "sfz" ;
+   rdfs:label "SFZ file",
+     "Fichier SFZ"@fr ,
+     "File SFZ"@it ;
+@@ -60,6 +62,7 @@
+
+ <@LV2_PLUGIN_URI@:tuningfile>
+   a lv2:Parameter ;
++  mod:fileTypes "scl" ;
+   pg:group <@LV2_PLUGIN_URI@#tuning> ;
+   rdfs:label "Scala file",
+     "Fichier Scala"@fr ,

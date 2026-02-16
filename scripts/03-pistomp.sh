@@ -41,10 +41,12 @@ build_pkg() {
 
 build_pkg "hylia"
 build_pkg "mod-host-pistomp"
+build_pkg "sfizz-pistomp"
 build_pkg "amidithru"
 build_pkg "mod-midi-merger"
 build_pkg "mod-ttymidi"
 build_pkg "libfluidsynth2-compat"
+
 # lg must be built before pyenv is set up, so python3 resolves to
 # /usr/bin/python3 (system 3.14) and the SWIG module installs there.
 build_pkg "lg"
@@ -252,6 +254,10 @@ ls -la "${SYSTEMD_DIR}"/{jack,mod-host,mod-ui,browsepy,mod-amidithru,mod-ala-pi-
 
 install -m 755 "${FILES}/firstboot.sh" /boot/firstboot.sh
 install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
+
+# ---------- helper scripts ----------
+
+install -m 755 "${FILES}/wait-for-mod-host.sh" /usr/local/bin/wait-for-mod-host.sh
 
 # ---------- touchosc2midi start script ----------
 
