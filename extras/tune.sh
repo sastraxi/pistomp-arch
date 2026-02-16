@@ -8,11 +8,15 @@
 set -euo pipefail
 
 CMDLINE="/boot/cmdline.txt"
-# Using an array for cleaner iteration
 PARAMS=("mitigations=off" "audit=0" "nowatchdog")
 
 if [[ $# -ne 1 ]]; then
     echo "Usage: $0 [unsafe|safe]"
+    exit 1
+fi
+
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root"
     exit 1
 fi
 
