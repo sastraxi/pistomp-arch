@@ -97,6 +97,7 @@ Arch uses predictable names (`wld0`), but pi-stomp hardcodes `wlan0`. A udev rul
 - **`vconsole.conf` must exist before `pacstrap`** — mkinitcpio's `sd-vconsole` hook fails otherwise.
 - **Don't `rm -rf /root/pistomp-arch`** in cleanup — it destroys the bind-mounted `cache/` directory (883MB LV2 tarball). Only delete `files/`, `pkgbuilds/`, `patches/`.
 - **`config.txt` must use explicit `initramfs` line** — ALARM's initramfs filename (`initramfs-linux.img`) doesn't match what `auto_initramfs=1` expects.
+- **RT kernel package overwrites config.txt** — The linux-rpi-rt PKGBUILD installs its own generic config.txt which lacks the IQaudio codec overlay and other pistomp-specific settings. `01-rt-kernel.sh` must restore our config.txt after installing the kernel package.
 
 ### ALSA state
 `firstboot.sh` copies `iqaudiocodec.state` to `/var/lib/alsa/asound.state`. The `alsa-restore.service` (from `alsa-utils`) loads it on every subsequent boot. Without it, JACK's ALSA driver times out.

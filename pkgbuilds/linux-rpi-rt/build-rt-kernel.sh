@@ -10,9 +10,9 @@ set -euo pipefail
 # 4. Adds our RT-specific config
 # 5. Prepares for makepkg (actual build happens in calling script)
 
-# This script only runs in chroot during image build
-REPO_ROOT="/root/pistomp-arch"
-SCRIPT_DIR="${REPO_ROOT}/pkgbuilds/linux-rpi-rt"
+# Detect script location (works both in chroot and standalone builds)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Load config for upstream commit hash
 source "${REPO_ROOT}/config.sh"
@@ -26,6 +26,8 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 
 # Clean previous build artifacts
 log "Cleaning previous build artifacts..."
+# Force removal with proper permissions (previous builds may have created files as builduser)
+chmod -R u+w "${SCRIPT_DIR}/src" "${SCRIPT_DIR}/pkg" 2>/dev/null || true
 rm -rf "${SCRIPT_DIR}/src" "${SCRIPT_DIR}/pkg"
 rm -f "${SCRIPT_DIR}"/*.tar.* "${SCRIPT_DIR}"/*.pkg.tar.*
 
@@ -56,7 +58,11 @@ cd "${SCRIPT_DIR}"
 cp PKGBUILD.orig PKGBUILD
 patch -p0 < linux-rpi-to-rt.patch
 
-# Verify patch applied correctly
+# Apply build optimization patch (optional - disable if you want all features)
+log "Applying build time optimizations..."
+patch -p0 < disable-heavy-features.patch
+
+# Verify patches applied correctly
 if ! grep -q "pkgbase=linux-rpi-rt" PKGBUILD; then
   die "Patch did not apply correctly - pkgbase was not changed"
 fi

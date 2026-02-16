@@ -3,7 +3,7 @@
 set -e
 
 SSID="pistomp"
-PASSWORD="pistomp"
+PASSWORD="pistompwifi"
 IFACE="wlan0"
 
 # Create hotspot connection if it doesn't exist

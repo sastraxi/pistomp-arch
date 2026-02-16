@@ -62,6 +62,13 @@ if [[ -f /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state ]]; then
     cp /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state /var/lib/alsa/asound.state
 fi
 
+# JACK audio configuration
+cat > /etc/default/jack <<EOF
+# JACK audio settings (configured from /boot/pistomp.conf)
+JACK_SAMPLE_RATE="${JACK_SAMPLE_RATE:-48000}"
+JACK_PERIOD="${JACK_PERIOD:-256}"
+EOF
+
 # Fix ownership
 chown -R pistomp:pistomp /home/pistomp/
 
