@@ -30,6 +30,11 @@ cat > /etc/security/limits.d/99-audio.conf <<EOF
 @audio   -  nice       -19
 EOF
 
+# Grant audio group access to CPU DMA latency control
+cat > /etc/udev/rules.d/99-cpu-dma-latency.rules <<EOF
+KERNEL=="cpu_dma_latency", GROUP="audio", MODE="0660"
+EOF
+
 # ---------- JACK config ----------
 
 install -m 755 /root/pistomp-arch/files/jackdrc /etc/jackdrc
