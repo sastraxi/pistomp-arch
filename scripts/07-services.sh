@@ -13,12 +13,12 @@ SYSTEMD_DIR="/usr/lib/systemd/system"
 WANTS="/etc/systemd/system/multi-user.target.wants"
 mkdir -p "${WANTS}"
 
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash; do
     install -v -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
 done
 
 # Services enabled by default
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash; do
     ln -sf "${SYSTEMD_DIR}/${svc}.service" "${WANTS}/"
 done
 
@@ -41,6 +41,8 @@ install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
 # ---------- helper scripts ----------
 
 install -m 755 "${FILES}/wait-for-mod-host.sh" /usr/local/bin/wait-for-mod-host.sh
+mkdir -p /usr/share/pistomp
+install -m 644 "${FILES}/splash.png" /usr/share/pistomp/splash.png
 
 # ---------- touchosc2midi start script ----------
 

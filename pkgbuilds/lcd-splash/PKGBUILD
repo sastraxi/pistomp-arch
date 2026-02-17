@@ -1,0 +1,30 @@
+# Maintainer: pistomp
+pkgname=lcd-splash
+pkgver=1.0
+pkgrel=1
+pkgdesc="Fast ILI9341 LCD boot splash for pi-Stomp"
+arch=('aarch64')
+license=('GPL-3.0-or-later')
+depends=('lg' 'libpng')
+makedepends=('terminus-font')
+
+# Source files are local (copied into build dir by build script)
+source=('lcd-splash.c' 'gen-font-h.py')
+sha256sums=('SKIP' 'SKIP')
+
+prepare() {
+    # Generate font.h from Terminus Bold 22px (11x22) console font
+    local font="/usr/share/kbd/consolefonts/ter-v22b.psf.gz"
+    /usr/bin/python3 gen-font-h.py "$font" > font.h
+}
+
+build() {
+    gcc -O2 -Wall -Wextra \
+        -o lcd-splash lcd-splash.c \
+        -I. \
+        -llgpio -lpng -lz
+}
+
+package() {
+    install -Dm755 lcd-splash "${pkgdir}/usr/bin/lcd-splash"
+}
