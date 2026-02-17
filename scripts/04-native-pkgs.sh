@@ -34,8 +34,6 @@ build_pkg() {
     rm -rf "${build_dir}"
 }
 
-build_pkg "lcd-splash"
-
 build_pkg "hylia"
 build_pkg "mod-host-pistomp"
 build_pkg "sfizz-pistomp"
@@ -45,9 +43,10 @@ build_pkg "mod-ttymidi"
 build_pkg "fluidsynth-headless"    # builds without SDL (no X11 deps)
 build_pkg "libfluidsynth2-compat"  # just symlinks -2 to -3
 
-
 # lg must be built before pyenv is set up, so python3 resolves to
 # /usr/bin/python3 (system 3.14) and the SWIG module installs there.
 build_pkg "lg"
+
+build_pkg "lcd-splash"
 
 echo "==> 04-native-pkgs: Done"
