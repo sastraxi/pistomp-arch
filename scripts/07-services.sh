@@ -18,9 +18,14 @@ for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboo
 done
 
 # Services enabled by default
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot; do
     ln -sf "${SYSTEMD_DIR}/${svc}.service" "${WANTS}/"
 done
+
+# Early services
+SYSINIT_WANTS="/etc/systemd/system/sysinit.target.wants"
+mkdir -p "${SYSINIT_WANTS}"
+ln -sf "${SYSTEMD_DIR}/pistomp-lcd-splash.service" "${SYSINIT_WANTS}/"
 
 # Services installed but NOT enabled by default
 for svc in ttymidi mod-midi-merger mod-midi-merger-broadcaster wifi-hotspot mod-touchosc2midi; do

@@ -1,13 +1,13 @@
 [Unit]
 Description=piStomp LCD boot splash
 DefaultDependencies=no
-After=sysinit.target
-Before=jack.service
+After=local-fs.target
+Before=sysinit.target
 
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/lcd-splash /usr/share/pistomp/splash.png "Starting..."
-RemainAfterExit=no
+RemainAfterExit=yes
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=sysinit.target
