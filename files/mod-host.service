@@ -13,6 +13,7 @@ LimitRTPRIO=95
 LimitMEMLOCK=infinity
 Restart=always
 RestartSec=1
+TimeoutStopSec=5
 
 [Install]
 WantedBy=multi-user.target
