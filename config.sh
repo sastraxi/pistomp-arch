@@ -24,7 +24,7 @@ PISTOMP_REPO="https://github.com/sastraxi/pi-stomp.git"
 PISTOMP_BRANCH="release/arch"
 
 MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
-MODUI_BRANCH="fix/effect-parameter-from-snapshot"
+MODUI_BRANCH="fix/subprocess-venv"
 
 PEDALBOARDS_REPO="https://github.com/sastraxi/dot-pedalboards.git"
 PEDALBOARDS_BRANCH="main"
