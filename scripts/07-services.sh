@@ -13,7 +13,7 @@ SYSTEMD_DIR="/usr/lib/systemd/system"
 WANTS="/etc/systemd/system/multi-user.target.wants"
 mkdir -p "${WANTS}"
 
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash lcd-reboot lcd-shutdown; do
     install -v -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
 done
 
@@ -26,6 +26,16 @@ done
 SYSINIT_WANTS="/etc/systemd/system/sysinit.target.wants"
 mkdir -p "${SYSINIT_WANTS}"
 ln -sf "${SYSTEMD_DIR}/pistomp-lcd-splash.service" "${SYSINIT_WANTS}/"
+
+# Reboot splash
+REBOOT_WANTS="/etc/systemd/system/reboot.target.wants"
+mkdir -p "${REBOOT_WANTS}"
+ln -sf "${SYSTEMD_DIR}/lcd-reboot.service" "${REBOOT_WANTS}/"
+
+# Shutdown splash
+POWEROFF_WANTS="/etc/systemd/system/poweroff.target.wants"
+mkdir -p "${POWEROFF_WANTS}"
+ln -sf "${SYSTEMD_DIR}/lcd-shutdown.service" "${POWEROFF_WANTS}/"
 
 # Services installed but NOT enabled by default
 for svc in ttymidi mod-midi-merger mod-midi-merger-broadcaster wifi-hotspot mod-touchosc2midi; do
@@ -47,7 +57,9 @@ install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
 
 install -m 755 "${FILES}/wait-for-mod-host.sh" /usr/local/bin/wait-for-mod-host.sh
 mkdir -p /usr/share/pistomp
-install -m 644 "${FILES}/splash.png" /usr/share/pistomp/splash.png
+# Convert splash PNG to raw RGB565-BE at build time (153600 bytes, skips libpng at runtime)
+pacman -S --needed --noconfirm ffmpeg
+ffmpeg -y -i "${FILES}/splash.png" -vf "scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:-1:-1:color=black" -sws_dither ed -f rawvideo -pix_fmt rgb565be /usr/share/pistomp/splash.rgb565
 
 # ---------- touchosc2midi start script ----------
 

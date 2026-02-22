@@ -1,11 +1,11 @@
 # Maintainer: pistomp
 pkgname=lcd-splash
 pkgver=1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Fast ILI9341 LCD boot splash for pi-Stomp"
 arch=('aarch64')
 license=('GPL-3.0-or-later')
-depends=('lg' 'libpng')
+depends=('lg')
 makedepends=('terminus-font')
 
 # Source files are local (copied into build dir by build script)
@@ -22,7 +22,7 @@ build() {
     gcc -O2 -Wall -Wextra \
         -o lcd-splash lcd-splash.c \
         -I. \
-        -llgpio -lpng -lz
+        -llgpio
 }
 
 package() {

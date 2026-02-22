@@ -6,7 +6,7 @@ After=jack.service mod-host.service mod-ui.service
 [Service]
 User=pistomp
 WorkingDirectory=/home/pistomp
-ExecStartPre=-/usr/bin/lcd-splash /usr/share/pistomp/splash.png "Loading pedalboard"
+ExecStartPre=-/usr/bin/lcd-splash /usr/share/pistomp/splash.rgb565 "Loading pedalboard"
 ExecStart=/opt/pistomp/venvs/pi-stomp/bin/python /home/pistomp/pi-stomp/modalapistomp.py
 TimeoutStopSec=5
 Restart=always

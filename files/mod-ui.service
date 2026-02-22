@@ -6,7 +6,7 @@ After=mod-host.service browsepy.service
 [Service]
 User=pistomp
 # Wait for mod-host to be ready before starting
-ExecStartPre=-/usr/bin/lcd-splash /usr/share/pistomp/splash.png "Starting web interface"
+ExecStartPre=-/usr/bin/lcd-splash /usr/share/pistomp/splash.rgb565 "Starting web interface"
 ExecStartPre=/usr/local/bin/wait-for-mod-host.sh
 Environment="LV2_PATH=/home/pistomp/.lv2:/usr/lib/lv2"
 Environment="MOD_DEV_ENVIRONMENT=0"

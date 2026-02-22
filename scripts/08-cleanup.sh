@@ -11,7 +11,7 @@ rm -f /etc/sudoers.d/builduser
 # ---------- remove build dependencies ----------
 
 echo "==> Removing build and orphaned dependencies..."
-pacman -Rns --noconfirm base-devel bc kmod inetutils xmlto docbook-xsl || true
+pacman -Rns --noconfirm base-devel bc kmod inetutils xmlto docbook-xsl ffmpeg || true
 pacman -Rns $(pacman -Qqdt) --noconfirm 2>/dev/null || true
 
 # ---------- clear package cache ----------

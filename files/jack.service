@@ -7,7 +7,7 @@ User=jack
 Environment="JACK_NO_AUDIO_RESERVATION=1"
 Environment="JACK_PROMISCUOUS_SERVER=jack"
 Environment="LV2_PATH=/home/pistomp/.lv2:/usr/lib/lv2"
-ExecStartPre=-+/usr/bin/lcd-splash /usr/share/pistomp/splash.png "Loading audio engine"
+ExecStartPre=-+/usr/bin/lcd-splash /usr/share/pistomp/splash.rgb565 "Loading audio engine"
 ExecStart=/etc/jackdrc
 LimitRTPRIO=infinity
 LimitMEMLOCK=infinity
