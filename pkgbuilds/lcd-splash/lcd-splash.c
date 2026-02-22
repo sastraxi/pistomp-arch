@@ -305,7 +305,7 @@ static int open_spi(void)
     int fd = open(SPI_DEVICE, O_RDWR);
     if (fd < 0) { perror(SPI_DEVICE); return -1; }
 
-    uint8_t  mode = SPI_MODE | SPI_NO_CS;
+    uint8_t  mode = SPI_MODE;
     uint8_t  bpw  = SPI_BPW;
     uint32_t speed = SPI_SPEED_HZ;
 
