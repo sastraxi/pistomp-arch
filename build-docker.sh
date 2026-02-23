@@ -13,26 +13,18 @@ if [[ ! -f "${SCRIPT_DIR}/cache/lv2plugins.tar.gz" ]]; then
     curl -L -o "${SCRIPT_DIR}/cache/lv2plugins.tar.gz" "${LV2_PLUGINS_URL}"
 fi
 
-# ---------- build docker image ----------
+# ---------- build and run ----------
 
-if [[ "${1:-}" == "--rebuild" ]] || ! docker image inspect pistomp-arch-builder &>/dev/null; then
-    echo "==> Building Docker image..."
-    docker buildx build --load -t pistomp-arch-builder "${SCRIPT_DIR}"
-else
-    echo "==> Using existing Docker image (pass --rebuild to force)"
-fi
-
-# ---------- run build ----------
-
-echo "==> Starting build in Docker..."
+echo "==> Starting build with docker compose..."
 mkdir -p "${SCRIPT_DIR}/deploy"
 
 TIMESTAMP=$(date +%Y-%m-%d)
 LOG_FILE="${SCRIPT_DIR}/deploy/build-${TIMESTAMP}.log"
 
-docker run --rm --privileged \
-    -e "BUILD_TIMESTAMP=${TIMESTAMP}" \
-    -v "${SCRIPT_DIR}:/build" \
-    pistomp-arch-builder 2>&1 | tee "${LOG_FILE}"
+if [[ "${1:-}" == "--rebuild" ]]; then
+    docker compose build --no-cache builder
+fi
+
+BUILD_TIMESTAMP="${TIMESTAMP}" docker compose run --rm builder 2>&1 | tee "${LOG_FILE}"
 
 echo "==> Done. Image in deploy/, log at ${LOG_FILE}"
