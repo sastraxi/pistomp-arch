@@ -55,6 +55,7 @@ install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
 
 # ---------- helper scripts ----------
 
+install -m 755 "${FILES}/wait-for-jack.sh" /usr/local/bin/wait-for-jack.sh
 install -m 755 "${FILES}/wait-for-mod-host.sh" /usr/local/bin/wait-for-mod-host.sh
 mkdir -p /usr/share/pistomp
 # Convert splash PNG to raw RGB565-BE at build time (153600 bytes, skips libpng at runtime)
