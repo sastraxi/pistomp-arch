@@ -3,15 +3,22 @@
 set -e
 
 CONF="/boot/pistomp.conf"
+LCD="/usr/bin/lcd-splash"
+SPLASH="/usr/share/pistomp/splash.rgb565"
+lcd() { "$LCD" "$SPLASH" "$1" 2>/dev/null || true; }
 
 # ---------- apply pistomp.conf ----------
+
+lcd "First boot setup..."
 
 if [[ -f "${CONF}" ]]; then
     source "${CONF}"
 
     # WiFi — create the connection profile so NM connects automatically
+    lcd "Configuring WiFi..."
     iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
     if [[ -n "${WIFI_SSID:-}" ]]; then
+        nmcli connection delete "preconfigured" 2>/dev/null || true
         nmcli connection add type wifi ifname wlan0 con-name "preconfigured" \
             ssid "${WIFI_SSID}" \
             wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PASSWORD}" \
@@ -38,7 +45,8 @@ if [[ -f "${CONF}" ]]; then
     # SSH authorized key
     if [[ -n "${SSH_AUTHORIZED_KEY:-}" ]]; then
         mkdir -p /home/pistomp/.ssh
-        echo "${SSH_AUTHORIZED_KEY}" >> /home/pistomp/.ssh/authorized_keys
+        grep -qxF "${SSH_AUTHORIZED_KEY}" /home/pistomp/.ssh/authorized_keys 2>/dev/null \
+            || echo "${SSH_AUTHORIZED_KEY}" >> /home/pistomp/.ssh/authorized_keys
         chmod 700 /home/pistomp/.ssh
         chmod 600 /home/pistomp/.ssh/authorized_keys
         chown -R pistomp:pistomp /home/pistomp/.ssh
@@ -47,6 +55,7 @@ fi
 
 # ---------- expand root partition to fill SD card ----------
 
+lcd "Expanding filesystem..."
 if command -v growpart &>/dev/null; then
     ROOT_DEV="$(findmnt -n -o SOURCE /)"
     DISK="/dev/$(lsblk -no PKNAME "${ROOT_DEV}")"
@@ -57,6 +66,7 @@ fi
 
 # ---------- hardware setup ----------
 
+lcd "Configuring audio..."
 # Copy audio card settings (IQAudio DAC+)
 if [[ -f /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state ]]; then
     cp /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state /var/lib/alsa/asound.state
