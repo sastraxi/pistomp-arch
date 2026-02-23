@@ -1,6 +1,6 @@
 [Unit]
 Description=First Boot Initialization
-After=multi-user.target
+Before=jack.service
 ConditionPathExists=/boot/firstboot.sh
 
 [Service]
