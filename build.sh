@@ -82,12 +82,13 @@ mkdir -p "${ROOT_MNT}" "${BOOT_MNT}"
 log "Creating ${IMG_SIZE_MB}MB image..."
 fallocate -l "${IMG_SIZE_MB}M" "${IMG_FILE}"
 
-# Partition: 512MB FAT32 boot + rest ext4 root
+# Partition: 512MB FAT32 boot + 4GB ext4 root + rest ext4 data
 log "Partitioning image..."
 parted -s "${IMG_FILE}" mklabel msdos
 parted -s "${IMG_FILE}" mkpart primary fat32 1MiB 513MiB
 parted -s "${IMG_FILE}" set 1 boot on
-parted -s "${IMG_FILE}" mkpart primary ext4 513MiB 100%
+parted -s "${IMG_FILE}" mkpart primary ext4 513MiB 4609MiB
+parted -s "${IMG_FILE}" mkpart primary ext4 4609MiB 100%
 
 # Attach loop device and create partition mappings
 log "Setting up loop device..."
@@ -95,26 +96,32 @@ LOOP_DEV=$(losetup --find --show "${IMG_FILE}")
 kpartx -av "${LOOP_DEV}"
 sleep 1
 
-# kpartx creates /dev/mapper/loopNp1, /dev/mapper/loopNp2
+# kpartx creates /dev/mapper/loopNp1, /dev/mapper/loopNp2, /dev/mapper/loopNp3
 LOOP_NAME=$(basename "${LOOP_DEV}")
 BOOT_PART="/dev/mapper/${LOOP_NAME}p1"
 ROOT_PART="/dev/mapper/${LOOP_NAME}p2"
+DATA_PART="/dev/mapper/${LOOP_NAME}p3"
 
 [[ -b "${BOOT_PART}" ]] || die "Boot partition ${BOOT_PART} not found"
 [[ -b "${ROOT_PART}" ]] || die "Root partition ${ROOT_PART} not found"
+[[ -b "${DATA_PART}" ]] || die "Data partition ${DATA_PART} not found"
 
 # Format
 log "Formatting partitions..."
 mkfs.vfat -F 32 -n PISTOMP "${BOOT_PART}"
 mkfs.ext4 -F "${ROOT_PART}"
+mkfs.ext4 -F "${DATA_PART}"
 
 # Mount
 log "Mounting partitions..."
 mount "${ROOT_PART}" "${ROOT_MNT}"
-mkdir -p "${ROOT_MNT}/boot"
+mkdir -p "${ROOT_MNT}/boot" "${ROOT_MNT}/home/pistomp"
 mount "${BOOT_PART}" "${BOOT_MNT}"
 # ALARM expects /boot to be the FAT32 partition
 mount --bind "${BOOT_MNT}" "${ROOT_MNT}/boot"
+# Mount data partition to home
+mount "${DATA_PART}" "${ROOT_MNT}/home/pistomp"
+chown 1000:1000 "${ROOT_MNT}/home/pistomp"
 
 # Create vconsole.conf before pacstrap (mkinitcpio's sd-vconsole hook needs it)
 mkdir -p "${ROOT_MNT}/etc"
@@ -156,6 +163,9 @@ run_in_chroot "scripts/07-services.sh"
 run_in_chroot "scripts/08-cleanup.sh"
 
 # ---------- finalize ----------
+
+# Install the final pacman.conf (real mirrors, no DisableSandbox)
+install -m 644 "${SCRIPT_DIR}/files/pacman-alarm.conf" "${ROOT_MNT}/etc/pacman.conf"
 
 log "Unmounting..."
 cleanup

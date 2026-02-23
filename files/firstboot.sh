@@ -2,6 +2,9 @@
 # Runs once on first boot via firstboot.service
 set -e
 
+# Mount root as RW during the first boot process
+mount -o remount,rw /
+
 CONF="/boot/pistomp.conf"
 LCD="/usr/bin/lcd-splash"
 SPLASH="/usr/share/pistomp/splash.rgb565"
@@ -53,15 +56,21 @@ if [[ -f "${CONF}" ]]; then
     fi
 fi
 
-# ---------- expand root partition to fill SD card ----------
+# ---------- expand DATA partition to fill SD card ----------
 
+# Partition 1: Boot (FAT32)
+# Partition 2: Root (ext4, Fixed size)
+# Partition 3: Data (ext4, Fill remaining space)
 lcd "Expanding filesystem..."
 if command -v growpart &>/dev/null; then
     ROOT_DEV="$(findmnt -n -o SOURCE /)"
     DISK="/dev/$(lsblk -no PKNAME "${ROOT_DEV}")"
-    PARTNUM="$(echo "${ROOT_DEV}" | grep -o '[0-9]*$')"
-    growpart "${DISK}" "${PARTNUM}" || true
-    resize2fs "${ROOT_DEV}" || true
+    DATA_PART="${DISK}p3"
+    
+    # Expand partition 3 (the data partition)
+    growpart "${DISK}" 3 || true
+    # Resize the filesystem on the data partition
+    resize2fs "${DATA_PART}" || true
 fi
 
 # ---------- hardware setup ----------
@@ -73,6 +82,7 @@ if [[ -f /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state ]]; then
 fi
 
 # JACK audio configuration
+mkdir -p /etc/default
 cat > /etc/default/jack <<EOF
 # JACK audio settings (configured from /boot/pistomp.conf)
 JACK_SAMPLE_RATE="${JACK_SAMPLE_RATE:-48000}"
@@ -101,4 +111,9 @@ systemctl disable --now bluetooth.service 2>/dev/null || true
 
 mv /boot/firstboot.sh /boot/firstboot.done
 systemctl disable firstboot.service
+
+# Remount root as RO just in case reboot takes a moment
+sync
+mount -o remount,ro /
+
 reboot
