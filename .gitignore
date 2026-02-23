@@ -5,3 +5,4 @@ misc/
 *.img
 *.img.xz
 *.img.zst
+.DS_Store

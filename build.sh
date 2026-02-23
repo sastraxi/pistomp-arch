@@ -128,8 +128,8 @@ pacstrap -C "${SCRIPT_DIR}/files/pacman-aarch64.conf" -M -K "${ROOT_MNT}" \
     raspberrypi-bootloader firmware-raspberrypi \
     archlinuxarm-keyring
 
-# Install the final pacman.conf (without DisableSandbox)
-install -m 644 "${SCRIPT_DIR}/files/pacman-alarm.conf" "${ROOT_MNT}/etc/pacman.conf"
+# Use pacoloco cache during chroot phase, replaced later
+install -m 644 "${SCRIPT_DIR}/files/pacman-aarch64.conf" "${ROOT_MNT}/etc/pacman.conf"
 
 # Copy project files into chroot
 log "Copying project files into chroot..."

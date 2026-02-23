@@ -1,0 +1,16 @@
+services:
+  pacoloco:
+    image: ghcr.io/anatol/pacoloco:latest
+    volumes:
+      - ./pacoloco.yaml:/etc/pacoloco.yaml:ro
+      - ./cache/pacman-mirror:/var/cache/pacoloco
+
+  builder:
+    build: .
+    privileged: true
+    environment:
+      - BUILD_TIMESTAMP
+    volumes:
+      - .:/build
+    depends_on:
+      - pacoloco

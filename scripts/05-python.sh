@@ -4,33 +4,23 @@ set -euo pipefail
 echo "==> 05-python: Python environments and applications"
 
 PISTOMP_DIR="/opt/pistomp"
-PYENV_ROOT="${PISTOMP_DIR}/pyenv"
 VENV_BASE="${PISTOMP_DIR}/venvs"
 PATCHES="/root/pistomp-arch/patches"
 UV_BIN="${PISTOMP_DIR}/bin/uv"
 
 mkdir -p "${VENV_BASE}"
 
-# ---------- pyenv (for mod-ui, browsepy, touchosc2midi only) ----------
+# ---------- Python 3.11 (prebuilt via uv, for mod-ui/browsepy/touchosc2midi) ----------
 
-echo "==> Installing pyenv..."
-git clone --depth 1 https://github.com/pyenv/pyenv.git "${PYENV_ROOT}"
+UV_PYTHON_DIR="${PISTOMP_DIR}/python"
+export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_DIR}"
 
-export PYENV_ROOT
-export PATH="${PYENV_ROOT}/bin:${PYENV_ROOT}/shims:${PATH}"
+echo "==> Installing Python ${PYTHON_VERSION} (prebuilt)..."
+"${UV_BIN}" python install "${PYTHON_VERSION}"
 
-# Install Python build dependencies
-pacman -S --noconfirm --needed \
-    openssl zlib xz tk sqlite readline libffi
-
-# Build Python (3.11+ already uses parallel compilation by default)
-echo "==> Building Python ${PYTHON_VERSION}..."
-pyenv install "${PYTHON_VERSION}"
-pyenv global "${PYTHON_VERSION}"
+PYTHON_BIN=$("${UV_BIN}" python find "${PYTHON_VERSION}")
 
 # ---------- Python virtualenvs ----------
-
-PYTHON_BIN="${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin/python"
 
 create_venv() {
     local name="$1"
@@ -90,6 +80,9 @@ git clone --depth 1 -b "${PISTOMP_BRANCH}" "${PISTOMP_REPO}" "/home/${FIRST_USER
 # (before firstboot.service runs). Without this, the IQAudio DAC doesn't clock and JACK times out.
 mkdir -p /var/lib/alsa
 cp "/home/${FIRST_USER}/pi-stomp/setup/audio/iqaudiocodec.state" /var/lib/alsa/asound.state
+
+# swig is needed to build lgpio from PyPI sdist (no cp314 wheel yet)
+pacman -S --noconfirm --needed swig
 
 # Create a dummy rpi-gpio package to satisfy dependencies that haven't
 # migrated to rpi-lgpio yet (like cap1xxx via gfxhat). rpi-lgpio provides the
