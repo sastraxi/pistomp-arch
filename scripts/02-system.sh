@@ -23,6 +23,7 @@ pacman -S --noconfirm --needed \
     parted \
     dosfstools \
     cloud-guest-utils \
+    which \
     wget curl 7zip bzip2 unzip \
     ttf-dejavu \
     raspberrypi-utils

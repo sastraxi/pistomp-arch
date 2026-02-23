@@ -1,8 +1,6 @@
 [Unit]
 Description=First Boot Initialization
-DefaultDependencies=no
-After=local-fs.target
-Before=multi-user.target sshd.service jack.service
+Before=jack.service
 ConditionPathExists=/boot/firstboot.sh
 
 [Service]

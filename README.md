@@ -10,7 +10,6 @@ Requires Docker with [buildx](https://docs.docker.com/build/buildx/install/).
 
 On macOS with Homebrew: `brew install docker-buildx` and add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`.
 
-
 ## Quick Start
 
 ### Build RT Kernel (optional)
@@ -22,7 +21,7 @@ On macOS with Homebrew: `brew install docker-buildx` and add `"cliPluginsExtraDi
 #         cache/linux-rpi-rt-headers-<version>-aarch64.pkg.tar.xz
 ```
 
-Ensure your docker server has plenty of RAM and CPU available; this took about 25 minutes on an M1 Pro.
+Ensure your docker server has plenty of RAM and CPU available; this took about 25 minutes on an M1 Pro. If the RT kernel is not found at the above path, the build will fallback to the default ALARM non-RT kernel.
 
 ### Build Image
 
@@ -32,7 +31,7 @@ Ensure your docker server has plenty of RAM and CPU available; this took about 2
 # Output: deploy/pistompOS-arch-<date>.img.zst
 ```
 
-First run downloads ~500MB of base OS + LV2 plugins into `cache/`.
+This will cache pacman-fetched packages via (pacoloco) into `cache/pacman-mirror` and locally-built PKGBUILDs into `cache/pkgs` in order to speed up subsequent builds.
 
 ## Flashing
 
@@ -93,7 +92,8 @@ The WiFi interface is renamed to `wlan0` via udev rule (Arch defaults to `wld0`,
 - **JACK2** + `jack-example-tools` (from pacman)
 - **lilv/serd/sord/sratom/lv2** (from pacman, including Python bindings)
 - **mod-host**, **mod-ui**, **browsepy**, **amidithru**, **ttymidi**, **mod-midi-merger**
-- **pyenv** + Python 3.11 + per-app virtualenvs at `/opt/pistomp/venvs/`
+- **sfizz** SFZ instrument plugin
+- **uv** + Python 3.11 + per-app virtualenvs at `/opt/pistomp/venvs/`
 - Pre-installed LV2 plugins + default pedalboards
 
 ## Service Chain
@@ -164,6 +164,8 @@ When running via `build-docker.sh`, the entire process happens inside a privileg
 # Download LV2 plugins cache first
 mkdir -p cache
 curl -L -o cache/lv2plugins.tar.gz https://www.treefallsound.com/downloads/lv2plugins.tar.gz
+
+# TODO: direct build script for rt kernel
 
 # Build as root (requires arch-install-scripts, parted, dosfstools, e2fsprogs, multipath-tools)
 sudo ./build.sh
