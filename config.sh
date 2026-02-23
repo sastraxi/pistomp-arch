@@ -15,7 +15,7 @@ KEYMAP="us"
 FIRST_USER="pistomp"
 FIRST_USER_PASS="pistomp"
 
-# Python (pyenv, for mod-ui/browsepy/touchosc2midi only;
+# Python (uv-managed prebuilt, for mod-ui/browsepy/touchosc2midi only;
 # pi-stomp uses system Python + --system-site-packages)
 PYTHON_VERSION="3.11.11"
 

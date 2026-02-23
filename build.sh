@@ -135,7 +135,7 @@ pacstrap -C "${SCRIPT_DIR}/files/pacman-aarch64.conf" -M -K "${ROOT_MNT}" \
     raspberrypi-bootloader firmware-raspberrypi \
     archlinuxarm-keyring
 
-# Use build-time pacman.conf (points at pacoloco cache when available)
+# Use pacoloco cache during chroot phase, replaced later
 install -m 644 "${SCRIPT_DIR}/files/pacman-aarch64.conf" "${ROOT_MNT}/etc/pacman.conf"
 
 # Copy project files into chroot
