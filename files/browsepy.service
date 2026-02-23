@@ -7,6 +7,7 @@ User=pistomp
 ExecStart=/opt/pistomp/venvs/browsepy/bin/browsepy 0.0.0.0 8081 --directory /home/pistomp/data/user-files --upload /home/pistomp/data/user-files
 Restart=always
 RestartSec=1
+TimeoutStopSec=5
 
 [Install]
 WantedBy=multi-user.target

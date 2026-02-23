@@ -1,20 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 05-cleanup: Cleaning up"
+echo "==> 08-cleanup: Cleaning up"
 
 # ---------- remove build user ----------
 
 userdel -r builduser 2>/dev/null || true
 rm -f /etc/sudoers.d/builduser
 
-echo "==> [debug] Service files before cleanup:"
-ls -la /usr/lib/systemd/system/{jack,mod-host,mod-ui,browsepy,mod-amidithru,mod-ala-pi-stomp,firstboot}.service 2>&1
-
 # ---------- remove build dependencies ----------
 
 echo "==> Removing build and orphaned dependencies..."
-pacman -Rns --noconfirm base-devel bc kmod inetutils xmlto docbook-xsl git patch || true
+pacman -Rns --noconfirm base-devel bc kmod inetutils xmlto docbook-xsl || true
 pacman -Rns $(pacman -Qqdt) --noconfirm 2>/dev/null || true
 
 # ---------- clear package cache ----------
@@ -55,8 +52,5 @@ rm -f /usr/bin/qemu-aarch64-static
 rm -rf /opt/pistomp/pyenv/cache/*
 rm -rf /opt/pistomp/pyenv/sources/*
 
-echo "==> [debug] Service files after cleanup:"
-ls -la /usr/lib/systemd/system/{jack,mod-host,mod-ui,browsepy,mod-amidithru,mod-ala-pi-stomp,firstboot}.service 2>&1
-
-echo "==> 05-cleanup: Done"
+echo "==> 08-cleanup: Done"
 echo "==> Build complete!"

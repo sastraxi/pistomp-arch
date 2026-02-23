@@ -52,7 +52,7 @@ groupadd -r gpio 2>/dev/null || true
 # pistomp user needs jack group for JACK socket access, gpio for PIO devices
 usermod -aG jack,gpio "${FIRST_USER}"
 
-# Create build user for makepkg (will be cleaned up in 05-cleanup.sh)
+# Create build user for makepkg (will be cleaned up in 08-cleanup.sh)
 useradd -m -s /bin/bash builduser 2>/dev/null || true
 echo "builduser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builduser
 

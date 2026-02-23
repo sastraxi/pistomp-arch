@@ -1,6 +1,7 @@
 work/
 deploy/
 cache/
+misc/
 *.img
 *.img.xz
 *.img.zst

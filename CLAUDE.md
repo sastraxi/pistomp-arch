@@ -14,17 +14,24 @@ sudo ./build.sh            # Build image (Linux, native)
 
 ```
 build.sh / build-docker.sh   # Image builder (pacstrap + arch-chroot)
+build-rt-kernel-docker.sh    # RT kernel builder (Docker)
+recompress-img.sh            # Re-compress image for distribution
+Dockerfile                   # Docker build environment
 config.sh                    # All version pins, URLs, repo refs — single source of truth
 scripts/
   00-base.sh                 # Pacman keyring, locale, users
   01-rt-kernel.sh            # Uses a precompiled RT kernel, if present
-  02-system.sh               # Networking, SSH, GPIO, authbind
+  02-system.sh               # Networking, SSH, GPIO, udev rules
   03-audio.sh                # JACK2, LV2, ALSA, RT limits
-  04-pistomp.sh              # pyenv, uv, PKGBUILDs, venvs, services, app data
-  05-cleanup.sh              # Shrink image
+  04-native-pkgs.sh          # uv, native C PKGBUILDs (mod-host, lg, etc.)
+  05-python.sh               # pyenv, Python venvs, pip installs
+  06-app-data.sh             # Pedalboards, LV2 plugins, user files
+  07-services.sh             # systemd units, firstboot, helper scripts
+  08-cleanup.sh              # Shrink image
 pkgbuilds/                   # Pacman packages for C components (mod-host, amidithru, etc.)
 files/                       # Static config files, systemd units, pacman configs, boot scripts
 patches/                     # Patches applied during build (mod-ui, etc.)
+extras/                      # Utility scripts copied to ~/extras on the image
 docs/                        # Extended docs (RT kernel guide, etc.)
 cache/                       # Downloaded LV2 plugins tarball (gitignored)
 ```
@@ -35,11 +42,11 @@ cache/                       # Downloaded LV2 plugins tarball (gitignored)
 
 2. **Isolated Python.** pyenv pins Python 3.11 at `/opt/pistomp/pyenv/`. Each app gets its own venv in `/opt/pistomp/venvs/<app>/`. System Python is untouched. Service files reference venv Python directly.
 
-3. **Scripts are sequential and idempotent.** `00-base.sh` → `05-pistomp.sh` run in order inside chroot. Each script should be safe to re-run (use `--needed`, check before creating, etc.).
+3. **Scripts are sequential and idempotent.** `00-base.sh` → `08-cleanup.sh` run in order inside chroot. Each script should be safe to re-run (use `--needed`, check before creating, etc.).
 
 4. **config.sh is the single source of truth** for versions, repo URLs, branches, and paths. Scripts read from environment variables — don't hardcode these values in scripts.
 
-5. **Services run as `pistomp` user, not root.** JACK runs as `jack` user. Port 80 access via authbind. Realtime limits via `/etc/security/limits.d/`.
+5. **Services run as `pistomp` user, not root.** JACK runs as `jack` user. Port 80 access via `AmbientCapabilities=CAP_NET_BIND_SERVICE`. Realtime limits via `/etc/security/limits.d/`.
 
 6. **Chroot limitation: no systemctl.** Enable services with symlinks:
    ```
@@ -113,7 +120,7 @@ This repo builds the image that ultimately runs on the pi-Stomp hardware, runnin
 ## When editing
 
 - **Adding a system package?** Put it in the right numbered script. Audio packages → `03-audio.sh`, general system → `02-system.sh`.
-- **Adding a native C component?** Create a PKGBUILD in `pkgbuilds/`, build it in `04-pistomp.sh`.
-- **Adding a Python app?** Create a venv in `04-pistomp.sh`, add a service file in `files/`.
+- **Adding a native C component?** Create a PKGBUILD in `pkgbuilds/`, build it in `04-native-pkgs.sh`.
+- **Adding a Python app?** Create a venv in `05-python.sh`, add a service file in `files/`.
 - **Changing a version or repo?** Edit `config.sh`, not the scripts.
-- **Adding a service?** Install the unit file, then symlink to enable (see chroot limitation above). Check the dependency chain.
+- **Adding a service?** Install the unit file in `07-services.sh`, then symlink to enable (see chroot limitation above). Check the dependency chain.

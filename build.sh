@@ -36,26 +36,10 @@ run_in_chroot() {
     log "Running ${script} in chroot..."
     cp "${SCRIPT_DIR}/${script}" "${ROOT_MNT}/root/current-script.sh"
     chmod +x "${ROOT_MNT}/root/current-script.sh"
-
-    # Export config vars into chroot environment
     arch-chroot "${ROOT_MNT}" /bin/bash -c "
-        export FIRST_USER='${FIRST_USER}'
-        export FIRST_USER_PASS='${FIRST_USER_PASS}'
-        export TARGET_HOSTNAME='${TARGET_HOSTNAME}'
-        export LOCALE='${LOCALE}'
-        export TIMEZONE='${TIMEZONE}'
-        export KEYMAP='${KEYMAP}'
-        export PYTHON_VERSION='${PYTHON_VERSION}'
-        export PISTOMP_REPO='${PISTOMP_REPO}'
-        export PISTOMP_BRANCH='${PISTOMP_BRANCH}'
-        export MODUI_REPO='${MODUI_REPO}'
-        export MODUI_BRANCH='${MODUI_BRANCH}'
-        export PEDALBOARDS_REPO='${PEDALBOARDS_REPO}'
-        export PEDALBOARDS_BRANCH='${PEDALBOARDS_BRANCH}'
-        export USERFILES_REPO='${USERFILES_REPO}'
-        export USERFILES_BRANCH='${USERFILES_BRANCH}'
-        export BROWSEPY_REPO='${BROWSEPY_REPO}'
-        export TOUCHOSC2MIDI_REPO='${TOUCHOSC2MIDI_REPO}'
+        set -a
+        source /root/pistomp-arch/config.sh
+        set +a
         /root/current-script.sh
     "
     rm -f "${ROOT_MNT}/root/current-script.sh"
@@ -165,8 +149,11 @@ run_in_chroot "scripts/00-base.sh"
 run_in_chroot "scripts/01-rt-kernel.sh"
 run_in_chroot "scripts/02-system.sh"
 run_in_chroot "scripts/03-audio.sh"
-run_in_chroot "scripts/04-pistomp.sh"
-run_in_chroot "scripts/05-cleanup.sh"
+run_in_chroot "scripts/04-native-pkgs.sh"
+run_in_chroot "scripts/05-python.sh"
+run_in_chroot "scripts/06-app-data.sh"
+run_in_chroot "scripts/07-services.sh"
+run_in_chroot "scripts/08-cleanup.sh"
 
 # ---------- finalize ----------
 
