@@ -13,7 +13,7 @@ SYSTEMD_DIR="/usr/lib/systemd/system"
 WANTS="/etc/systemd/system/multi-user.target.wants"
 mkdir -p "${WANTS}"
 
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash lcd-reboot lcd-shutdown; do
     install -v -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
 done
 
@@ -21,6 +21,21 @@ done
 for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot; do
     ln -sf "${SYSTEMD_DIR}/${svc}.service" "${WANTS}/"
 done
+
+# Early services
+SYSINIT_WANTS="/etc/systemd/system/sysinit.target.wants"
+mkdir -p "${SYSINIT_WANTS}"
+ln -sf "${SYSTEMD_DIR}/pistomp-lcd-splash.service" "${SYSINIT_WANTS}/"
+
+# Reboot splash
+REBOOT_WANTS="/etc/systemd/system/reboot.target.wants"
+mkdir -p "${REBOOT_WANTS}"
+ln -sf "${SYSTEMD_DIR}/lcd-reboot.service" "${REBOOT_WANTS}/"
+
+# Shutdown splash
+POWEROFF_WANTS="/etc/systemd/system/poweroff.target.wants"
+mkdir -p "${POWEROFF_WANTS}"
+ln -sf "${SYSTEMD_DIR}/lcd-shutdown.service" "${POWEROFF_WANTS}/"
 
 # Services installed but NOT enabled by default
 for svc in ttymidi mod-midi-merger mod-midi-merger-broadcaster wifi-hotspot mod-touchosc2midi; do
@@ -42,6 +57,9 @@ install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
 
 install -m 755 "${FILES}/wait-for-jack.sh" /usr/local/bin/wait-for-jack.sh
 install -m 755 "${FILES}/wait-for-mod-host.sh" /usr/local/bin/wait-for-mod-host.sh
+mkdir -p /usr/share/pistomp
+# Pre-converted from splash.png (320x240 RGB565-BE, 153600 bytes)
+install -m 644 "${FILES}/splash.rgb565" /usr/share/pistomp/splash.rgb565
 
 # ---------- touchosc2midi start script ----------
 

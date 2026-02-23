@@ -11,7 +11,18 @@ rm -f /etc/sudoers.d/builduser
 # ---------- remove build dependencies ----------
 
 echo "==> Removing build and orphaned dependencies..."
-pacman -Rns --noconfirm base-devel bc kmod inetutils xmlto docbook-xsl || true
+# Build tools
+for pkg in base-devel bc kmod inetutils xmlto docbook-xsl ffmpeg; do
+    pacman -Rns --noconfirm "$pkg" 2>/dev/null || true
+done
+# Pyenv build deps (tk/X11 chain — not needed on headless device)
+for pkg in tk tcl libxss libxft libxrender libxext libx11; do
+    pacman -Rns --noconfirm "$pkg" 2>/dev/null || true
+done
+# Kernel headers (only needed for compiling kernel modules)
+pacman -Rns --noconfirm linux-rpi-rt-headers 2>/dev/null || true
+pacman -Rns --noconfirm linux-rpi-headers 2>/dev/null || true
+# Sweep remaining orphans
 pacman -Rns $(pacman -Qqdt) --noconfirm 2>/dev/null || true
 
 # ---------- clear package cache ----------

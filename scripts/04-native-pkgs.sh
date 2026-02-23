@@ -47,4 +47,6 @@ build_pkg "libfluidsynth2-compat"  # just symlinks -2 to -3
 # /usr/bin/python3 (system 3.14) and the SWIG module installs there.
 build_pkg "lg"
 
+build_pkg "lcd-splash"
+
 echo "==> 04-native-pkgs: Done"

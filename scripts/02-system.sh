@@ -13,7 +13,7 @@ pacman -S --noconfirm --needed \
     openssh \
     rsync \
     htop \
-    nano \
+    nano less \
     python python-pip \
     libgpiod \
     i2c-tools \
@@ -23,7 +23,7 @@ pacman -S --noconfirm --needed \
     parted \
     dosfstools \
     cloud-guest-utils \
-    wget curl \
+    wget curl 7zip bzip2 unzip \
     ttf-dejavu \
     raspberrypi-utils
 
@@ -44,7 +44,7 @@ ln -sf /usr/lib/systemd/system/avahi-daemon.service "${WANTS}/"
 cat > /etc/udev/rules.d/99-pistomp-hw.rules <<'EOF'
 SUBSYSTEM=="gpio", KERNEL=="gpiochip*", GROUP="gpio", MODE="0660"
 SUBSYSTEM=="gpio", KERNEL=="gpiochip*", DRIVERS=="pinctrl-rp1", SYMLINK+="gpiochip4"
-SUBSYSTEM=="spidev", KERNEL=="spidev*", GROUP="gpio", MODE="0660"
+SUBSYSTEM=="spidev", KERNEL=="spidev*", GROUP="gpio", MODE="0660", TAG+="systemd"
 SUBSYSTEM=="i2c-dev", KERNEL=="i2c-[0-9]*", GROUP="gpio", MODE="0660"
 SUBSYSTEM=="rp1-pio", GROUP="gpio", MODE="0660"
 EOF
