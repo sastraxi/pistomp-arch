@@ -25,6 +25,10 @@ pacman -Rns --noconfirm linux-rpi-headers 2>/dev/null || true
 # Sweep remaining orphans
 pacman -Rns $(pacman -Qqdt) --noconfirm 2>/dev/null || true
 
+# ---------- install production pacman.conf ----------
+
+install -m 644 /root/pistomp-arch/files/pacman-alarm.conf /etc/pacman.conf
+
 # ---------- clear package cache ----------
 
 pacman -Scc --noconfirm
