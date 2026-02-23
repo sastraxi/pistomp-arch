@@ -1,11 +1,14 @@
 [Unit]
 Description=First Boot Initialization
-After=multi-user.target
+DefaultDependencies=no
+After=local-fs.target
+Before=multi-user.target sshd.service jack.service
 ConditionPathExists=/boot/firstboot.sh
 
 [Service]
 Type=oneshot
 ExecStart=/boot/firstboot.sh
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
