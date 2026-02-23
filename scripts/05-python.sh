@@ -21,7 +21,7 @@ export PATH="${PYENV_ROOT}/bin:${PYENV_ROOT}/shims:${PATH}"
 
 # Install Python build dependencies
 pacman -S --noconfirm --needed \
-    openssl zlib xz tk sqlite bzip2 readline libffi 7zip
+    openssl zlib xz tk sqlite readline libffi
 
 # Build Python (3.11+ already uses parallel compilation by default)
 echo "==> Building Python ${PYTHON_VERSION}..."

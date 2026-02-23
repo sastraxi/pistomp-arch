@@ -58,9 +58,8 @@ install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
 install -m 755 "${FILES}/wait-for-jack.sh" /usr/local/bin/wait-for-jack.sh
 install -m 755 "${FILES}/wait-for-mod-host.sh" /usr/local/bin/wait-for-mod-host.sh
 mkdir -p /usr/share/pistomp
-# Convert splash PNG to raw RGB565-BE at build time (153600 bytes, skips libpng at runtime)
-pacman -S --needed --noconfirm ffmpeg
-ffmpeg -y -i "${FILES}/splash.png" -vf "scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:-1:-1:color=black" -sws_dither ed -f rawvideo -pix_fmt rgb565be /usr/share/pistomp/splash.rgb565
+# Pre-converted from splash.png (320x240 RGB565-BE, 153600 bytes)
+install -m 644 "${FILES}/splash.rgb565" /usr/share/pistomp/splash.rgb565
 
 # ---------- touchosc2midi start script ----------
 

@@ -13,7 +13,7 @@ pacman -S --noconfirm --needed \
     openssh \
     rsync \
     htop \
-    nano \
+    nano less \
     python python-pip \
     libgpiod \
     i2c-tools \
@@ -23,7 +23,7 @@ pacman -S --noconfirm --needed \
     parted \
     dosfstools \
     cloud-guest-utils \
-    wget curl \
+    wget curl 7zip bzip2 unzip \
     ttf-dejavu \
     raspberrypi-utils
 
