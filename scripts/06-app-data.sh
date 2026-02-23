@@ -34,7 +34,7 @@ fi
 LV2_CACHE="/root/pistomp-arch/cache/lv2plugins.tar.gz"
 [[ -f "${LV2_CACHE}" ]] || { echo "ERROR: LV2 plugins not found at ${LV2_CACHE}. Run ./build-docker.sh first to download." >&2; exit 1; }
 echo "==> Installing LV2 plugins from cache..."
-tar xzf "${LV2_CACHE}" -C "/home/${FIRST_USER}/" --exclude='._*'
+tar xzf "${LV2_CACHE}" -C "/home/${FIRST_USER}/" --exclude='._*' --warning=no-unknown-keyword
 ln -sf "/home/${FIRST_USER}/.lv2" "/home/${FIRST_USER}/data/.lv2"
 
 # ---------- last.json generation ----------

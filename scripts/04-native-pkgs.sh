@@ -21,15 +21,36 @@ pacman -S --needed --noconfirm base-devel
 echo "==> Enabling parallel compilation..."
 sed -i 's/^#MAKEFLAGS=.*/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
 
+PKG_CACHE="/root/pistomp-arch/cache/pkgs"
+mkdir -p "${PKG_CACHE}"
+
 build_pkg() {
     local pkg="$1"
-    echo "==> Building PKGBUILD: ${pkg}..."
+
+    # Check cache: extract expected filename from PKGBUILD metadata
     local build_dir="/tmp/build-${pkg}"
     cp -r "${PKGBUILDS}/${pkg}" "${build_dir}"
+    local _pkgname _pkgver _pkgrel
+    _pkgname=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgname")
+    _pkgver=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgver")
+    _pkgrel=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgrel")
+    local cached
+    cached=$(compgen -G "${PKG_CACHE}/${_pkgname}-${_pkgver}-${_pkgrel}-*.pkg.tar.*" | head -1) || true
+
+    if [[ -n "${cached}" ]]; then
+        echo "==> Installing cached package: ${pkg} (${_pkgver}-${_pkgrel})"
+        pacman -U --noconfirm "${cached}"
+        rm -rf "${build_dir}"
+        return
+    fi
+
+    echo "==> Building PKGBUILD: ${pkg}..."
     chown -R builduser:builduser "${build_dir}"
     pushd "${build_dir}" > /dev/null
     su builduser -c "makepkg -s --noconfirm"
     pacman -U --noconfirm "${build_dir}"/*.pkg.tar.*
+    # Cache the built package for next time
+    cp "${build_dir}"/*.pkg.tar.* "${PKG_CACHE}/"
     popd > /dev/null
     rm -rf "${build_dir}"
 }
@@ -43,8 +64,7 @@ build_pkg "mod-ttymidi"
 build_pkg "fluidsynth-headless"    # builds without SDL (no X11 deps)
 build_pkg "libfluidsynth2-compat"  # just symlinks -2 to -3
 
-# lg must be built before pyenv is set up, so python3 resolves to
-# /usr/bin/python3 (system 3.14) and the SWIG module installs there.
+# lg's SWIG module installs against system python3 (/usr/bin/python3).
 build_pkg "lg"
 
 build_pkg "lcd-splash"
