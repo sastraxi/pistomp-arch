@@ -42,19 +42,24 @@
 
 /* ILI9341 commands */
 #define CMD_SLPOUT      0x11
+#define CMD_GAMSET      0x26
 #define CMD_DISPON      0x29
 #define CMD_CASET       0x2A
 #define CMD_PASET       0x2B
 #define CMD_RAMWR       0x2C
 #define CMD_MADCTL      0x36
 #define CMD_PIXFMT      0x3A
+#define CMD_VMCTR1      0xC5
+#define CMD_VMCTR2      0xC7
+#define CMD_PGAMCTRL    0xE0
+#define CMD_NGAMCTRL    0xE1
 
 /* MADCTL for landscape, BGR panel (MY=1, MX=1, MV=1, BGR=1) */
 #define MADCTL_LANDSCAPE 0xE8
 
-/* Text rendering — white in RGB565-BE */
-#define MSG_COLOR       __builtin_bswap16(0xFFFF)
-#define MSG_PAD_BOTTOM  16
+/* Text rendering — black in RGB565-BE */
+#define MSG_COLOR       __builtin_bswap16(0x0000)
+#define MSG_REGION_TOP  160     /* text centred between this and bottom of LCD */
 
 /* Max bytes per spidev write() — kernel default bufsiz */
 #define SPI_CHUNK       4096
@@ -123,12 +128,31 @@ static void lcd_init(void)
         if (fd >= 0) close(fd);
     }
 
-    /* Always set pixel format and orientation — other software
-     * (e.g. adafruit driver) may have changed these. */
+    /* Always set pixel format, orientation, and color calibration —
+     * other software (e.g. adafruit driver) may have changed these.
+     * Values match the Adafruit ILI9341 driver init sequence. */
     send_cmd(CMD_PIXFMT);
     send_data8(0x55);
     send_cmd(CMD_MADCTL);
     send_data8(MADCTL_LANDSCAPE);
+
+    /* VCOM voltage — affects contrast and color balance */
+    send_cmd(CMD_VMCTR1);
+    send_data((const uint8_t[]){ 0x3E, 0x28 }, 2);
+    send_cmd(CMD_VMCTR2);
+    send_data8(0x86);
+
+    /* Gamma correction */
+    send_cmd(CMD_GAMSET);
+    send_data8(0x01);
+    send_cmd(CMD_PGAMCTRL);
+    send_data((const uint8_t[]){
+        0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1,
+        0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00 }, 15);
+    send_cmd(CMD_NGAMCTRL);
+    send_data((const uint8_t[]){
+        0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1,
+        0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F }, 15);
 }
 
 static void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
@@ -206,7 +230,7 @@ static void render_message(uint16_t *fb, const char *msg)
     int len = (int)strlen(msg);
     int text_w = len * FONT_WIDTH;
     int px = (LCD_W - text_w) / 2;
-    int py = LCD_H - FONT_HEIGHT - MSG_PAD_BOTTOM;
+    int py = MSG_REGION_TOP + (LCD_H - MSG_REGION_TOP - FONT_HEIGHT) / 2;
 
     for (int i = 0; i < len; i++)
         render_char(fb, px + i * FONT_WIDTH, py, (unsigned char)msg[i]);
