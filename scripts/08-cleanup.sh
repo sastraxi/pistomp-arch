@@ -32,6 +32,7 @@ pacman -Scc --noconfirm
 # ---------- install production pacman.conf ----------
 
 install -m 644 /root/pistomp-arch/files/pacman-alarm.conf /etc/pacman.conf
+pacman -Sy
 
 # ---------- clear temporary files ----------
 
