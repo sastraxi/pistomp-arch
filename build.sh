@@ -16,6 +16,9 @@ cleanup() {
     # rootfs. umount -R (recursive) handles all submounts in the correct
     # reverse order. This is NOT lazy unmount — each unmount is real and
     # flushes data before proceeding.
+    # Unmount in leaf-to-root order: data, cache bind, boot bind, boot, root
+    mountpoint -q "${ROOT_MNT}/home/pistomp" 2>/dev/null && umount "${ROOT_MNT}/home/pistomp" || true
+    mountpoint -q "${ROOT_MNT}/root/pistomp-arch/cache" 2>/dev/null && umount "${ROOT_MNT}/root/pistomp-arch/cache" || true
     if mountpoint -q "${ROOT_MNT}" 2>/dev/null; then
         umount -R "${ROOT_MNT}" 2>/dev/null || {
             # If recursive unmount fails, kill stale processes and retry

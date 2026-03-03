@@ -6,7 +6,6 @@ ConditionPathExists=/boot/firstboot.sh
 [Service]
 Type=oneshot
 ExecStart=/boot/firstboot.sh
-RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target

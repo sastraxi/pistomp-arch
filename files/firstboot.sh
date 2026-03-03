@@ -65,8 +65,13 @@ lcd "Expanding filesystem..."
 if command -v growpart &>/dev/null; then
     ROOT_DEV="$(findmnt -n -o SOURCE /)"
     DISK="/dev/$(lsblk -no PKNAME "${ROOT_DEV}")"
-    DATA_PART="${DISK}p3"
-    
+    # Derive partition 3 path: mmcblk0 -> mmcblk0p3, sda -> sda3
+    if [[ "${DISK}" == *mmcblk* || "${DISK}" == *nvme* || "${DISK}" == *loop* ]]; then
+        DATA_PART="${DISK}p3"
+    else
+        DATA_PART="${DISK}3"
+    fi
+
     # Expand partition 3 (the data partition)
     growpart "${DISK}" 3 || true
     # Resize the filesystem on the data partition
