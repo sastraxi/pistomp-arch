@@ -106,7 +106,8 @@ ROOT_PART="/dev/mapper/${LOOP_NAME}p2"
 # Format
 log "Formatting partitions..."
 mkfs.vfat -F 32 -n PISTOMP "${BOOT_PART}"
-mkfs.ext4 -F -L rootfs -O "^huge_file,^64bit" "${ROOT_PART}"
+mkfs.ext4 -F -L rootfs -O "^huge_file,^64bit,metadata_csum,journal_checksum" "${ROOT_PART}"
+tune2fs -e remount-ro "${ROOT_PART}"
 
 # Mount
 log "Mounting partitions..."

@@ -67,7 +67,7 @@ install -m 644 /root/pistomp-arch/files/cmdline.txt /boot/cmdline.txt
 cat > /etc/fstab <<EOF
 # <file system>  <mount point>  <type>  <options>  <dump>  <pass>
 /dev/mmcblk0p1   /boot          vfat    defaults   0       0
-/dev/mmcblk0p2   /              ext4    defaults,noatime  0       1
+/dev/mmcblk0p2   /              ext4    defaults,noatime,commit=30,errors=remount-ro  0       1
 EOF
 
 echo "==> 00-base: Done"
