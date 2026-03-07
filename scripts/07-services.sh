@@ -37,6 +37,9 @@ POWEROFF_WANTS="/etc/systemd/system/poweroff.target.wants"
 mkdir -p "${POWEROFF_WANTS}"
 ln -sf "${SYSTEMD_DIR}/lcd-shutdown.service" "${POWEROFF_WANTS}/"
 
+# Late shutdown hook — runs after filesystems are unmounted, shows "Safe to power off"
+install -Dm755 "${FILES}/lcd-safe-poweroff.sh" /usr/lib/systemd/system-shutdown/lcd-safe-poweroff.sh
+
 # Services installed but NOT enabled by default
 for svc in ttymidi mod-midi-merger mod-midi-merger-broadcaster wifi-hotspot mod-touchosc2midi; do
     if [[ -f "${FILES}/${svc}.service" ]]; then
