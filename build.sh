@@ -106,7 +106,11 @@ ROOT_PART="/dev/mapper/${LOOP_NAME}p2"
 # Format
 log "Formatting partitions..."
 mkfs.vfat -F 32 -n PISTOMP "${BOOT_PART}"
-mkfs.ext4 -F -L rootfs -O "^huge_file,^64bit,metadata_csum,journal_checksum" "${ROOT_PART}"
+ROOT_FEATURES="^huge_file"
+if grep -q "64bit" /etc/mke2fs.conf 2>/dev/null; then
+    ROOT_FEATURES="^64bit,${ROOT_FEATURES}"
+fi
+mkfs.ext4 -F -L rootfs -O "${ROOT_FEATURES}" "${ROOT_PART}"
 tune2fs -e remount-ro "${ROOT_PART}"
 
 # Mount
