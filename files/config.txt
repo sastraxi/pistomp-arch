@@ -18,11 +18,21 @@ arm_boost=1
 dtoverlay=iqaudio-codec
 dtparam=audio=off
 
-# UART for MIDI
+# UART for MIDI (Pi 3/4 only — Pi 5 routes automatically)
+[pi3]
 enable_uart=1
 dtoverlay=miniuart-bt
 dtoverlay=midi-uart0
 
+[pi4]
+enable_uart=1
+dtoverlay=miniuart-bt
+dtoverlay=midi-uart0
+
+[pi5]
+dtoverlay=midi-uart0
+
+[all]
 # USB host mode
 dtoverlay=dwc2,dr_mode=host
 
