@@ -165,6 +165,9 @@ run_in_chroot "scripts/08-cleanup.sh"
 log "Unmounting..."
 cleanup
 
+log "Checking filesystem..."
+e2fsck -f -y "${ROOT_PART}" || true
+
 # Compress minimally (see recompress-img.sh for distribution)
 TIMESTAMP="${BUILD_TIMESTAMP:-$(date +%Y-%m-%d)}"
 OUTPUT="${DEPLOY_DIR}/${IMG_NAME}-${TIMESTAMP}.img.zst"
