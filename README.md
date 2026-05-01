@@ -67,6 +67,47 @@ On first boot, `firstboot.service` runs automatically and:
 
 After the reboot, the full service chain starts: JACK → mod-host → mod-ui → pi-stomp. The web UI is available on port 80.
 
+## Working with a Running Device
+
+### Updating app code without re-flashing
+
+The two main applications are live git clones — update them with a `git pull`:
+
+```bash
+# Update pi-stomp
+cd ~/pi-stomp && git pull
+
+# Update mod-ui (editable install at /opt/pistomp/mod-ui)
+cd /opt/pistomp/mod-ui && git pull
+
+# Restart affected services
+sudo systemctl restart mod-ala-pi-stomp   # pi-stomp only
+sudo systemctl restart mod-ui             # mod-ui (cascades to pi-stomp)
+sudo systemctl restart jack               # full audio stack restart
+```
+
+**Note:** If build-time patches were applied to mod-ui (see `patches/mod-ui/`), a `git pull` may conflict. Resolve manually or re-flash if the patch is structural.
+
+For system packages, standard pacman works:
+
+```bash
+sudo pacman -Syu
+```
+
+Native C components (mod-host, etc.) are pacman packages — to rebuild one, copy the relevant PKGBUILD from `pkgbuilds/` and run `makepkg -si`.
+
+### Adding a Python dependency to the pi-stomp venv
+
+The pi-stomp venv is at `/opt/pistomp/venvs/pi-stomp/` (system Python, `--system-site-packages`). Install directly with `uv`, which is bundled at `/opt/pistomp/bin/uv`:
+
+```bash
+sudo /opt/pistomp/bin/uv pip install --python /opt/pistomp/venvs/pi-stomp/bin/python <package>
+```
+
+To make it permanent in the image, add the package to pi-stomp's `pyproject.toml`.
+
+---
+
 ## Debugging
 
 Default credentials: `pistomp` / `pistomp` (SSH enabled).
