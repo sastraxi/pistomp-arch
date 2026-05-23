@@ -77,6 +77,12 @@ dns=dnsmasq
 unmanaged-devices=none
 EOF
 
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/wifi-powersave.conf <<EOF
+[connection]
+wifi.powersaving = 2
+EOF
+
 # ---------- bash aliases ----------
 
 install -m 644 /root/pistomp-arch/files/bash_aliases "/home/${FIRST_USER}/.bash_aliases"
