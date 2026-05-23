@@ -39,6 +39,7 @@ run_in_chroot() {
     arch-chroot "${ROOT_MNT}" /bin/bash -c "
         set -a
         source /root/pistomp-arch/config.sh
+        source /root/pistomp-arch/build-meta.sh
         set +a
         /root/current-script.sh
     "
@@ -144,6 +145,12 @@ cp -r "${SCRIPT_DIR}/files" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/pkgbuilds" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/patches" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/extras" "${ROOT_MNT}/root/pistomp-arch/"
+
+# Calculate build metadata (software version, build tag/date)
+BUILD_TAG=$(git -C "${SCRIPT_DIR}" describe --tags --always --dirty 2>/dev/null || echo "unknown")
+BUILD_DATE=$(date +"%y%m%d")
+printf 'BUILD_TAG="%s"\nBUILD_DATE="%s"\n' "${BUILD_TAG}" "${BUILD_DATE}" > "${ROOT_MNT}/root/pistomp-arch/build-meta.sh"
+
 # Bind-mount cache to avoid copying large tarballs
 mkdir -p "${ROOT_MNT}/root/pistomp-arch/cache"
 mount --bind "${SCRIPT_DIR}/cache" "${ROOT_MNT}/root/pistomp-arch/cache"
