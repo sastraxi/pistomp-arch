@@ -25,6 +25,7 @@ if [[ "${1:-}" == "--rebuild" ]]; then
     docker compose build --no-cache builder
 fi
 
-BUILD_TIMESTAMP="${TIMESTAMP}" docker compose run --rm builder 2>&1 | tee "${LOG_FILE}"
+BUILD_TAG=$(git -C "${SCRIPT_DIR}" describe --tags --always --dirty 2>/dev/null || echo "unknown")
+BUILD_TIMESTAMP="${TIMESTAMP}" BUILD_TAG="${BUILD_TAG}" docker compose run --rm builder 2>&1 | tee "${LOG_FILE}"
 
 echo "==> Done. Image in deploy/, log at ${LOG_FILE}"

@@ -147,7 +147,7 @@ cp -r "${SCRIPT_DIR}/patches" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/extras" "${ROOT_MNT}/root/pistomp-arch/"
 
 # Calculate build metadata (software version, build tag/date)
-BUILD_TAG=$(git -C "${SCRIPT_DIR}" describe --tags --always --dirty 2>/dev/null || echo "unknown")
+BUILD_TAG="${BUILD_TAG:-$(git -C "${SCRIPT_DIR}" describe --tags --always --dirty 2>/dev/null || echo "unknown")}"
 BUILD_DATE=$(date +"%y%m%d")
 printf 'BUILD_TAG="%s"\nBUILD_DATE="%s"\n' "${BUILD_TAG}" "${BUILD_DATE}" > "${ROOT_MNT}/root/pistomp-arch/build-meta.sh"
 
