@@ -1,5 +1,7 @@
 [Unit]
 Description=First Boot Initialization
+After=NetworkManager.service
+Wants=NetworkManager.service
 Before=jack.service
 ConditionPathExists=/boot/firstboot.sh
 
