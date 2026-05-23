@@ -84,24 +84,10 @@ cp "/home/${FIRST_USER}/pi-stomp/setup/audio/iqaudiocodec.state" /var/lib/alsa/a
 # swig is needed to build lgpio from PyPI sdist (no cp314 wheel yet)
 pacman -S --noconfirm --needed swig
 
-# Create a dummy rpi-gpio package to satisfy dependencies that haven't
-# migrated to rpi-lgpio yet (like cap1xxx via gfxhat). rpi-lgpio provides the
-# actual RPi.GPIO module and is installed as part of [hardware] extras.
-mkdir -p /tmp/fake-rpi-gpio
-cat > /tmp/fake-rpi-gpio/pyproject.toml <<EOF
-[project]
-name = "rpi-gpio"
-version = "99.9.9"
-EOF
-"${UV_BIN}" pip install --python "${VENV_BASE}/pi-stomp/bin/python" /tmp/fake-rpi-gpio
-
-# Install pi-stomp and its dependencies from pyproject.toml
-"${UV_BIN}" pip install --python "${VENV_BASE}/pi-stomp/bin/python" \
-    -e "/home/${FIRST_USER}/pi-stomp[hardware]"
-
-# Pi 5 neopixel support (not declared as a dependency by adafruit-circuitpython-neopixel)
-"${UV_BIN}" pip install --python "${VENV_BASE}/pi-stomp/bin/python" \
-    Adafruit-Blinka-Raspberry-Pi5-Neopixel
+# Install pi-stomp and its dependencies from its uv lockfile.
+UV_PROJECT_ENVIRONMENT="${VENV_BASE}/pi-stomp" \
+    "${UV_BIN}" sync --frozen --no-dev --extra hardware \
+    --project "/home/${FIRST_USER}/pi-stomp"
 
 # ------------------------------------------------------------------------------------
 # ---------- browsepy ----------
@@ -127,6 +113,7 @@ _T2M_PY="${VENV_BASE}/touchosc2midi/bin/python"
 "${UV_BIN}" pip install --python "${_T2M_PY}" --no-build-isolation pyliblo3
 "${UV_BIN}" pip install --python "${_T2M_PY}" --no-deps \
     "touchosc2midi @ git+${TOUCHOSC2MIDI_REPO}"
+
 # Install touchosc2midi's remaining deps (everything except pyliblo)
 "${UV_BIN}" pip install --python "${_T2M_PY}" \
     python-rtmidi mido docopt netifaces zeroconf
