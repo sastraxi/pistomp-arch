@@ -21,7 +21,7 @@ PYTHON_VERSION="3.11.11"
 
 # Repos
 PISTOMP_REPO="https://github.com/sastraxi/pi-stomp.git"
-PISTOMP_BRANCH="release/arch"
+PISTOMP_BRANCH="release/patch"
 
 MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
 MODUI_BRANCH="fix/subprocess-venv"
