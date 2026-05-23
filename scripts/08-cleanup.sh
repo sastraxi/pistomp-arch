@@ -65,7 +65,7 @@ prune_firmware_dir() {
     for dir in "$base"/*/; do
         [[ -d "$dir" ]] || continue
         case "$(basename "$dir")" in
-            brcm|cypress) continue ;;
+            brcm|cypress|updates) continue ;;
             *) rm -rf "$dir" ;;
         esac
     done
@@ -74,8 +74,8 @@ prune_firmware_dir() {
 }
 
 if [[ -d /usr/lib/firmware ]]; then
-    prune_firmware_dir /usr/lib/firmware
     prune_firmware_dir /usr/lib/firmware/updates
+    prune_firmware_dir /usr/lib/firmware
 fi
 
 # ---------- prune kernel modules ----------
