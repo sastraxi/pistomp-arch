@@ -12,6 +12,8 @@ ExecStart=/opt/pistomp/venvs/pi-stomp/bin/python /home/pistomp/pi-stomp/modalapi
 TimeoutStopSec=5
 Restart=always
 RestartSec=5
+LimitMEMLOCK=infinity
+LimitRTPRIO=64
 
 [Install]
 WantedBy=multi-user.target
