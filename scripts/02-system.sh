@@ -83,6 +83,13 @@ cat > /etc/NetworkManager/conf.d/wifi-powersave.conf <<EOF
 wifi.powersaving = 2
 EOF
 
+# loosen the kernel's reverse-path filter so it doesn't drop packets
+# if both wifi and ethernet are active and they come back on an unexpected path
+cat > /etc/sysctl.d/99-rp-filter.conf <<EOF
+net.ipv4.conf.all.rp_filter = 2
+net.ipv4.conf.default.rp_filter = 2
+EOF
+
 # ---------- bash aliases ----------
 
 install -m 644 /root/pistomp-arch/files/bash_aliases "/home/${FIRST_USER}/.bash_aliases"
