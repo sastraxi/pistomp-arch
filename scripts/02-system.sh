@@ -97,6 +97,7 @@ autoconnect=true
 [ipv4]
 method=auto
 link-local=3
+route-metric=100
 
 [ipv6]
 method=link-local

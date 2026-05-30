@@ -22,7 +22,13 @@ if [[ -f "${CONF}" ]]; then
         nmcli connection add type wifi ifname wlan0 con-name "preconfigured" \
             ssid "${WIFI_SSID}" \
             wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PASSWORD}" \
+            ipv4.route-metric 700 ipv6.route-metric 700 \
             connection.autoconnect yes || true
+    fi
+
+    # Direct-cable IP on ethernet (link-local, non-routable per RFC 3927)
+    if [[ -n "${DIRECT_IP:-}" ]]; then
+        nmcli connection modify wired-end0 ipv4.addresses "${DIRECT_IP}/16" || true
     fi
 
     # Hostname
