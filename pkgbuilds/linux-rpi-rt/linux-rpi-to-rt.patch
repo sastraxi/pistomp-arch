@@ -1,21 +1,5 @@
 --- PKGBUILD.orig	2026-02-15 21:49:18
 +++ PKGBUILD	2026-02-15 21:52:06
-@@ -5,13 +5,13 @@
- # Contributer: Jan Alexander Steffens (heftig) <heftig@archlinux.org>
- # Contributer: Ben Schneider <ben@bens.haus>
- 
--pkgbase=linux-rpi
-+pkgbase=linux-rpi-rt
- _commit=9ea9c76f2de058be8cee1391ac877ebdb942943e
- _srcname=linux-${_commit}
- _kernelname=${pkgbase#linux}
- pkgver=6.18.10
- pkgrel=1
--pkgdesc='Linux'
-+pkgdesc='Linux with PREEMPT_RT (realtime) for Raspberry Pi'
- url="https://github.com/raspberrypi/linux"
- arch=(armv7h aarch64)
- license=(GPL-2.0-only)
 @@ -28,6 +28,7 @@
          0001-Make-proc-cpuinfo-consistent-on-arm64-and-arm.patch
          linux.preset

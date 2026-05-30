@@ -56,6 +56,15 @@ rm -f "${SCRIPT_DIR}/linux-rpi.install"
 log "Applying RT patch..."
 cd "${SCRIPT_DIR}"
 cp PKGBUILD.orig PKGBUILD
+
+# Rewrite pkgbase + pkgdesc via sed (decoupled from upstream version pin so
+# kernel bumps don't break the patch's context).
+sed -i.bak \
+  -e 's/^pkgbase=linux-rpi$/pkgbase=linux-rpi-rt/' \
+  -e "s/^pkgdesc='Linux'$/pkgdesc='Linux with PREEMPT_RT (realtime) for Raspberry Pi'/" \
+  PKGBUILD
+rm -f PKGBUILD.bak
+
 patch -p0 < linux-rpi-to-rt.patch
 
 # Apply build optimization patch (optional - disable if you want all features)

@@ -40,5 +40,5 @@ LV2_PLUGINS_URL="https://www.treefallsound.com/downloads/lv2plugins.tar.gz"
 LV2_PLUGINS_SHA256=""
 
 # RT Kernel (upstream Arch ARM linux-rpi PKGBUILD we base on)
-LINUX_RPI_PKGBUILD_COMMIT="7c052fb40b1918cc7cae34d2045e237788ebedf5"  # Latest as of 2026-02-15, v6.18.10-1
+LINUX_RPI_PKGBUILD_COMMIT="a759a569d5cd77fa3bc3719098d4388a731ba5a5"  # Latest as of 2026-05-30, v6.18.33-3
 LINUX_RPI_PKGBUILD_BASE_URL="https://raw.githubusercontent.com/archlinuxarm/PKGBUILDs/${LINUX_RPI_PKGBUILD_COMMIT}/core/linux-rpi"
