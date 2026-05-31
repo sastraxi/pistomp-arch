@@ -82,6 +82,19 @@ done
 install -v -m 644 "${FILES}/wifi-check.service" "${SYSTEMD_DIR}/"
 ln -sf "${SYSTEMD_DIR}/wifi-check.service" "${WANTS}/"
 
+# ---------- JackBridge pi-side service ----------
+#
+# Installs pi-stomp-jackbridge.service + its helper scripts under /usr/local.
+# Not enabled — the LCD UI starts/stops it on demand. See JackRouter pi/README
+# (or pi-stomp's JACKBRIDGE_RECORDING.md) for the integration contract.
+
+echo "==> Installing JackBridge pi-side service (${JACKROUTER_REF})..."
+JACKROUTER_SRC=/tmp/jackrouter
+rm -rf "${JACKROUTER_SRC}"
+git clone --depth 1 -b "${JACKROUTER_REF}" "${JACKROUTER_REPO}" "${JACKROUTER_SRC}"
+bash "${JACKROUTER_SRC}/pi/install.sh"
+rm -rf "${JACKROUTER_SRC}"
+
 # ---------- MOTD (pistomp logo) ----------
 
 echo "==> Installing MOTD..."

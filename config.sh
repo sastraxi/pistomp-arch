@@ -32,6 +32,10 @@ PEDALBOARDS_BRANCH="main"
 USERFILES_REPO="https://github.com/TreeFallSound/pi-stomp-user-files.git"
 USERFILES_BRANCH="main"
 
+# DAW recording over Ethernet; uses only `pi/.
+JACKROUTER_REPO="https://github.com/sastraxi/JackRouter.git"
+JACKROUTER_REF="master"
+
 BROWSEPY_REPO="https://github.com/micahvdm/browsepy.git"
 TOUCHOSC2MIDI_REPO="https://github.com/micahvdm/touchosc2midi.git"
 
