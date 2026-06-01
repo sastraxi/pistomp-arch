@@ -6,8 +6,6 @@ echo "==> 03-audio: Audio stack"
 # ---------- audio packages ----------
 
 pacman -S --noconfirm --needed \
-    jack2 \
-    jack-example-tools \
     rtirq \
     lilv python-lilv \
     serd sord sratom lv2 \

@@ -1,0 +1,55 @@
+# Maintainer: pistomp
+# jack2 with the PI-controller-integrator-reset fix applied to netadapter.
+# Structure adapted from Arch's official jack2 PKGBUILD; the pi-stomp
+# patch is the load-bearing change. See pi-controller-reset.patch for
+# the full diagnosis.
+pkgname=jack2-pistomp
+_upstream=1.9.22
+pkgver=1.9.22
+pkgrel=1
+pkgdesc="JACK2 audio server with pi-stomp netadapter PI-controller reset fix"
+arch=('aarch64')
+url="https://github.com/jackaudio/jack2"
+license=('GPL2' 'LGPL2.1')
+depends=('alsa-lib' 'db5.3' 'dbus' 'libsamplerate' 'opus' 'systemd-libs')
+makedepends=('git' 'python' 'waf')
+provides=("jack=${pkgver}" "jack2=${pkgver}" 'libjack.so' 'libjacknet.so' 'libjackserver.so')
+conflicts=('jack' 'jack2' 'pipewire-jack')
+options=(!lto)
+source=("jack2-${_upstream}::git+https://github.com/jackaudio/jack2.git#tag=v${_upstream}"
+        "jack2-1.9.22-db-5.3.patch"
+        "pi-controller-reset.patch")
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+prepare() {
+    cd "jack2-${_upstream}"
+    patch -Np1 -i "${srcdir}/jack2-1.9.22-db-5.3.patch"
+    patch -Np1 -i "${srcdir}/pi-controller-reset.patch"
+    # Drop the bundled waflib so we build against the system waf, which
+    # supports Python 3.12 (the bundled one imports `imp`, removed in 3.12).
+    rm -rv waflib
+}
+
+build() {
+    cd "jack2-${_upstream}"
+    export CXXFLAGS="${CXXFLAGS} -I/usr/include/db5.3"
+    export LDFLAGS="${LDFLAGS} -ldb-5.3"
+    export LINKFLAGS="${LDFLAGS}"
+    export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
+    waf configure \
+        --prefix=/usr \
+        --htmldir=/usr/share/doc/jack2/html \
+        --autostart=none \
+        --systemd-unit \
+        --classic \
+        --dbus
+    waf build
+}
+
+package() {
+    cd "jack2-${_upstream}"
+    export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
+    waf --destdir="${pkgdir}" install
+}

@@ -55,6 +55,15 @@ build_pkg() {
     rm -rf "${build_dir}"
 }
 
+# Built first so it replaces stock jack2 before anything else links against
+# libjack. Carries the netadapter PI-controller integrator-reset fix.
+# We explicitly remove stock jack2 if present to avoid conflicts during installation.
+pacman -Rdd --noconfirm jack2 2>/dev/null || true
+build_pkg "jack2-pistomp"
+
+# Now that jack2-pistomp provides jack, we can install the example tools
+pacman -S --noconfirm --needed jack-example-tools
+
 build_pkg "hylia"
 build_pkg "mod-host-pistomp"
 build_pkg "sfizz-pistomp"
