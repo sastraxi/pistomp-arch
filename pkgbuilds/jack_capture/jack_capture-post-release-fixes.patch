@@ -1,0 +1,2468 @@
+From febeb0356ccb30c64092d37bfbbc55fb109843cd Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Tue, 30 May 2017 13:55:20 +0200
+Subject: [PATCH 01/29] use enum type for process_state variable
+
+---
+ jack_capture.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index b2d15a1..cca7c32 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -1662,14 +1662,14 @@ static void process_fill_buffers(int jack_block_size){
+ static bool jack_transport_started=false;
+ static bool jack_freewheel_started=false;
+ 
+-enum{
++enum ProcessState{
+   NOT_STARTED,
+   HANDLING_LATENCY,
+   RECORDING,
+   RECORDING_FINISHED
+ };
+ 
+-static int process_state=NOT_STARTED;
++static enum ProcessState process_state=NOT_STARTED;
+ 
+ static int process(jack_nframes_t nframes, void *arg){
+   (void)arg;
+
+From c2281ffd9da30a68cd0953095087cc36d31caa18 Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Tue, 30 May 2017 14:43:54 +0200
+Subject: [PATCH 02/29] Clean up semaphores
+
+---
+ jack_capture.c | 123 ++++++++++++++++++++++---------------------------
+ vringbuffer.c  |  44 +++++-------------
+ vringbuffer.h  |  22 ++-------
+ 3 files changed, 71 insertions(+), 118 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index cca7c32..2fdf57c 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -31,19 +31,11 @@
+ #include <unistd.h>
+ #include <sndfile.h>
+ #include <pthread.h>
+-#ifdef __APPLE__
+-#include <mach/mach.h>
+-#else
+-#include <semaphore.h>
+-#endif
+ #include <math.h>
+ #include <stdarg.h>
+ 
+ #include <termios.h>
+ 
+-#ifndef __APPLE__
+-#include <sys/sysinfo.h>
+-#endif
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <fcntl.h>
+@@ -66,6 +58,10 @@ int  init_osc(int osc_port);
+ void shutdown_osc(void);
+ #endif
+ 
++#include "jack_capture.h"
++
++#include "sema.h"
++
+ #include "atomic.h"
+ 
+ #include "vringbuffer.h"
+@@ -184,7 +180,6 @@ static float *vu_vals=NULL;
+ static int   *vu_times=NULL;
+ static int *vu_peaks=NULL;
+ static float *vu_peakvals=NULL;
+-static void print_message(const char *fmt, ...);
+ 
+ /* Synchronization between jack process thread and disk thread. */
+ static DEFINE_ATOMIC(bool, is_initialized) = false; // This $@#$@#$ variable is needed because jack ports must be initialized _after_ (???) the client is activated. (stupid jack)
+@@ -212,11 +207,7 @@ static pthread_t connect_thread={0} ;
+ 
+ 
+ // das stop semaphore
+-#ifdef __APPLE__
+-static semaphore_t stop_sem;
+-#else
+-static sem_t stop_sem;
+-#endif
++static SEM_TYPE_T stop_sem;
+ 
+ 
+ 
+@@ -840,12 +831,26 @@ static void *helper_thread_func(void *arg){
+ }
+ 
+ 
++enum ThreadType{
++  UNINITIALIZED_THREAD_TYPE,
++  OTHER_THREAD,
++  REALTIME_THREAD,
++  MAIN_THREAD
++};
++
++static __thread enum ThreadType g_thread_type = UNINITIALIZED_THREAD_TYPE;
++
+ 
+ static pthread_mutex_t print_message_mutex = PTHREAD_MUTEX_INITIALIZER;  
+-static void print_message(const char *fmt, ...){
++void print_message(const char *fmt, ...){  
+   if (absolutely_silent==true) return;
+-  
++
++  if (g_thread_type == REALTIME_THREAD)
++    // what?
++    return;
++    
+   if(helper_thread_running==0 || write_to_stdout==true){
++    
+     va_list argp;
+     va_start(argp,fmt);
+     fprintf(stderr,"%c[31m" MESSAGE_PREFIX,0x1b);   // set red color
+@@ -853,6 +858,7 @@ static void print_message(const char *fmt, ...){
+     fprintf(stderr,"%c[0m",0x1b); // reset colors
+     fflush(stderr);
+     va_end(argp);
++    
+   }else{
+ 
+     pthread_mutex_lock(&print_message_mutex);{
+@@ -1071,11 +1077,7 @@ static int64_t overruns=0;
+ 
+ #if HAVE_LIBLO
+ bool queued_file_rotate=false;
+-#ifdef __APPLE__
+-void osc_stop() { semaphore_signal(stop_sem); }
+-#else
+-void osc_stop() { sem_post(&stop_sem); }
+-#endif
++ void osc_stop() { SEM_SIGNAL(stop_sem); }
+ void osc_tm_start() { timemachine_recording=true; }
+ void osc_tm_stop() { program_ended_with_return=true; osc_stop(); }
+ #endif
+@@ -1674,17 +1676,23 @@ static enum ProcessState process_state=NOT_STARTED;
+ static int process(jack_nframes_t nframes, void *arg){
+   (void)arg;
+ 
+-  jack_transport_state_t state=0;
++  if (g_thread_type == UNINITIALIZED_THREAD_TYPE)
++    g_thread_type = REALTIME_THREAD;
++  
++  jack_transport_state_t jack_transport_state=JackTransportStopped;
+ 
++  // jack_transport
+   if(use_jack_transport==true){
+-    state=jack_transport_query(client,NULL);
+-    if(state==JackTransportRolling){
++    jack_transport_state=jack_transport_query(client,NULL);
++    if(jack_transport_state==JackTransportRolling){
+       jack_transport_started=true;
+     }
+ 
+     if(jack_transport_started==false)
+       return 0;
+   }
++
++  // jack_freewheel
+   if (use_jack_freewheel==true) {
+     if (freewheel_mode > 0)
+       jack_freewheel_started=true;
+@@ -1729,28 +1737,25 @@ static int process(jack_nframes_t nframes, void *arg){
+ 
+     if(ATOMIC_GET(num_frames_recorded)==num_frames_to_record){
+       send_buffer_to_disk_thread(current_buffer);
+-#ifdef __APPLE__
+-      semaphore_signal(stop_sem);
+-#else
+-      sem_post(&stop_sem);
+-#endif
++      SEM_SIGNAL(stop_sem);
+       process_state=RECORDING_FINISHED;
+     }
+ 
+   }else{
++    
+     process_fill_buffers(nframes);
++    
+     ATOMIC_ADD(num_frames_recorded, nframes);
+-    if(    (use_jack_transport==true && state==JackTransportStopped)
+-	|| (use_jack_freewheel==true && freewheel_mode==0)
+-      ){
+-      send_buffer_to_disk_thread(current_buffer);
+-#ifdef __APPLE__
+-      semaphore_signal(stop_sem);
+-#else
+-      sem_post(&stop_sem);
+-#endif
+-      process_state=RECORDING_FINISHED;
+-    }
++    
++    if((   use_jack_transport==true && jack_transport_state==JackTransportStopped)
++       || (use_jack_freewheel==true && freewheel_mode==0)
++       )
++      {
++        send_buffer_to_disk_thread(current_buffer);
++        SEM_SIGNAL(stop_sem);
++        process_state=RECORDING_FINISHED;
++      }
++    
+   }
+ 
+   vringbuffer_trigger_autoincrease_callback(vringbuffer);
+@@ -2110,22 +2115,14 @@ static void create_ports(void){
+ static void finish(int sig){
+   (void)sig;
+   //turn_on_echo(); //Don't think we can do this from a signal handler...
+-#ifdef __APPLE__
+-  semaphore_signal(stop_sem);
+-#else
+-  sem_post(&stop_sem);
+-#endif
++  SEM_SIGNAL(stop_sem);
+ }
+ 
+ static void jack_shutdown(void *arg){
+   (void)arg;
+   fprintf(stderr,"jack_capture: JACK shutdown.\n");
+   jack_has_been_shut_down=true;
+-#ifdef __APPLE__
+-  semaphore_signal(stop_sem);
+-#else
+-  sem_post(&stop_sem);
+-#endif
++  SEM_SIGNAL(stop_sem);
+ }
+ 
+ 
+@@ -2182,11 +2179,7 @@ static void* keypress_func(void* arg){
+ 
+   program_ended_with_return = true;
+ 
+-#ifdef __APPLE__
+-  semaphore_signal(stop_sem);
+-#else
+-  sem_post(&stop_sem);
+-#endif
++  SEM_SIGNAL(stop_sem);
+   return NULL;
+ }
+ 
+@@ -2599,13 +2592,11 @@ void init_various(void){
+   verbose_print("main() Init waiting.\n");
+   // Init waiting.
+   {
+-#ifdef __APPLE__
+-    semaphore_create(mach_task_self(), &stop_sem, SYNC_POLICY_FIFO, 0);
+-#else
+-    sem_init(&stop_sem,0,0);
+-#endif
++    SEM_INIT(stop_sem);
++    
+     signal(SIGINT,finish);
+     signal(SIGTERM,finish);
++    
+     if(no_stdin==false)
+       start_keypress_thread();
+   }
+@@ -2695,14 +2686,7 @@ void wait_until_recording_finished(void){
+     print_message("Waiting for Jack Freewheeling .\n");
+   
+ 
+-#ifdef __APPLE__
+-  kern_return_t ret;
+-  while((ret=semaphore_wait(stop_sem))!=KERN_SUCCESS)
+-    print_message("Warning: semaphore_wait failed: %d",ret);
+-#else
+-  while(sem_wait(&stop_sem)==-1)
+-    print_message("Warning: sem_wait failed: %s",strerror(errno));
+-#endif
++  SEM_WAIT(stop_sem);
+ 
+   turn_on_echo();
+   if(helper_thread_running==1){
+@@ -2781,7 +2765,8 @@ void print_argv(char **argv,int argc){
+ int main (int argc, char *argv[]){
+   //get_free_mem();
+   //mainpid=getpid();
+-
++  g_thread_type = MAIN_THREAD;
++    
+   char **org_argv = argv;
+ 
+   // remove exe name from argument list.
+diff --git a/vringbuffer.c b/vringbuffer.c
+index f40cdf5..c2a7a09 100644
+--- a/vringbuffer.c
++++ b/vringbuffer.c
+@@ -222,11 +222,7 @@ void vringbuffer_delete(vringbuffer_t* vrb){
+ static void *autoincrease_func(void* arg){
+   vringbuffer_t *vrb=arg;
+   vrb->autoincrease_callback(vrb,true,0,0);
+-#ifdef __APPLE__
+-  semaphore_signal(vrb->autoincrease_started);
+-#else
+-  sem_post(&vrb->autoincrease_started);
+-#endif
++  SEM_SIGNAL(vrb->autoincrease_started);
+   while(vrb->please_stop==false){
+     int reading_size = vringbuffer_reading_size(vrb);
+     int writing_size = vringbuffer_writing_size(vrb);
+@@ -249,24 +245,18 @@ void vringbuffer_trigger_autoincrease_callback(vringbuffer_t *vrb){
+   upwaker_wake_up(vrb->autoincrease_trigger);
+ }
+ 
+-void    vringbuffer_set_autoincrease_callback  (vringbuffer_t *vrb, Vringbuffer_autoincrease_callback callback, useconds_t interval){
++void vringbuffer_set_autoincrease_callback  (vringbuffer_t *vrb, Vringbuffer_autoincrease_callback callback, useconds_t interval){
+   vrb->autoincrease_callback = callback;
+   vrb->autoincrease_interval = interval;
+ 
+-#ifdef __APPLE__
+-  semaphore_create(mach_task_self(), &vrb->autoincrease_started, SYNC_POLICY_FIFO, 0);
+-#else
+-  sem_init(&vrb->autoincrease_started,0,0);
+-#endif
++  SEM_INIT(vrb->autoincrease_started);
++  
+   pthread_create(&vrb->autoincrease_thread, NULL, autoincrease_func, vrb);
+-#ifdef __APPLE__
+-  semaphore_wait(vrb->autoincrease_started);
+-#else
+-  sem_wait(&vrb->autoincrease_started);
+-#endif  
++
++  SEM_WAIT(vrb->autoincrease_started);
+ }
+ 
+-void	vringbuffer_increase		(vringbuffer_t *vrb, int num_elements, void **elements){
++void vringbuffer_increase(vringbuffer_t *vrb, int num_elements, void **elements){
+   if(num_elements+vrb->curr_num_elements > vrb->max_num_elements)
+     num_elements = vrb->max_num_elements - vrb->curr_num_elements;
+ 
+@@ -300,11 +290,7 @@ int vringbuffer_reading_size    (vringbuffer_t *vrb){
+ static void *receiver_func(void* arg){
+   vringbuffer_t *vrb=arg;
+   vrb->receiver_callback(vrb,true,NULL);
+-#ifdef __APPLE__
+-  semaphore_signal(vrb->receiver_started);
+-#else
+-  sem_post(&vrb->receiver_started);
+-#endif
++  SEM_SIGNAL(vrb->receiver_started);
+ 
+   void *buffer = NULL;
+ 
+@@ -330,17 +316,11 @@ static void *receiver_func(void* arg){
+ void vringbuffer_set_receiver_callback(vringbuffer_t *vrb,Vringbuffer_receiver_callback receiver_callback){
+   vrb->receiver_callback=receiver_callback;
+ 
+-#ifdef __APPLE__
+-  semaphore_create(mach_task_self(), &vrb->receiver_started, SYNC_POLICY_FIFO, 0);
+-#else
+-  sem_init(&vrb->receiver_started,0,0);
+-#endif
++  SEM_INIT(vrb->receiver_started);
++  
+   pthread_create(&vrb->receiver_thread, NULL, receiver_func, vrb);
+-#ifdef __APPLE__
+-  semaphore_wait(vrb->receiver_started);
+-#else
+-  sem_wait(&vrb->receiver_started);
+-#endif
++
++  SEM_INIT(vrb->receiver_started);
+ }
+ 
+ 
+diff --git a/vringbuffer.h b/vringbuffer.h
+index c5da8e0..45ef3c3 100644
+--- a/vringbuffer.h
++++ b/vringbuffer.h
+@@ -1,20 +1,16 @@
+ 
+ #include <stdbool.h>
+-
+ #include <unistd.h>
+ 
+ #include <pthread.h>
+ 
+-#ifdef __APPLE__
+-#include <mach/mach.h>
+-#else
+-#include <semaphore.h>
+-#endif
++#include <jack/ringbuffer.h>
++
+ 
+ #include "upwaker.h"
++#include "sema.h"
+ 
+ 
+-#include <jack/ringbuffer.h>
+ 
+ enum vringbuffer_receiver_callback_return_t {
+   VRB_CALLBACK_DIDNT_USE_BUFFER,
+@@ -49,21 +45,13 @@ typedef struct vringbuffer_t{
+   // Receiver callback
+   pthread_t receiver_thread;
+   upwaker_t *receiver_trigger;
+-#ifdef __APPLE__
+-  semaphore_t receiver_started;
+-#else
+-  sem_t receiver_started;
+-#endif
++  SEM_TYPE_T receiver_started;
+   Vringbuffer_receiver_callback receiver_callback;
+ 
+   // Autoincrease callback
+   pthread_t autoincrease_thread;
+   upwaker_t *autoincrease_trigger;
+-#ifdef __APPLE__
+-  semaphore_t autoincrease_started;
+-#else
+-  sem_t autoincrease_started;
+-#endif
++  SEM_TYPE_T autoincrease_started;
+   Vringbuffer_autoincrease_callback autoincrease_callback;
+   useconds_t autoincrease_interval;
+ }vringbuffer_t;
+
+From 687625963872fb52397da28eaa0a5b98d369b003 Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Tue, 30 May 2017 14:48:29 +0200
+Subject: [PATCH 03/29] Forgotten files
+
+---
+ jack_capture.h |  6 ++++++
+ sema.h         | 27 +++++++++++++++++++++++++++
+ 2 files changed, 33 insertions(+)
+ create mode 100644 jack_capture.h
+ create mode 100644 sema.h
+
+diff --git a/jack_capture.h b/jack_capture.h
+new file mode 100644
+index 0000000..c2d1ad3
+--- /dev/null
++++ b/jack_capture.h
+@@ -0,0 +1,6 @@
++#ifndef _JACK_CAPTURE_JACK_CAPTURE_H
++#define _JACK_CAPTURE_JACK_CAPTURE_H
++
++void print_message(const char *fmt, ...);
++
++#endif
+diff --git a/sema.h b/sema.h
+new file mode 100644
+index 0000000..58b49c6
+--- /dev/null
++++ b/sema.h
+@@ -0,0 +1,27 @@
++#ifndef _JACK_CAPTURE_SEMA_H
++#define _JACK_CAPTURE_SEMA_H
++
++#include <errno.h>
++
++#ifdef __APPLE__
++#include <mach/mach.h>
++#include <sys/sysinfo.h>
++#else
++#include <semaphore.h>
++#endif
++
++#include "jack_capture.h"
++
++#ifdef __APPLE__
++ #define SEM_TYPE_T semaphore_t
++ #define SEM_INIT(Sem) semaphore_create(mach_task_self(), &Sem, SYNC_POLICY_FIFO, 0)
++ #define SEM_SIGNAL(Sem) semaphore_signal(Sem)
++ #define SEM_WAIT(Sem)   {kern_return_t ret;while((ret=semaphore_wait(Sem))!=KERN_SUCCESS) print_message("Warning: semaphore_wait failed: %d",ret);}
++#else
++ #define SEM_TYPE_T sem_t
++ #define SEM_INIT(Sem) sem_init(&Sem,0,0)
++ #define SEM_SIGNAL(Sem) sem_post(&Sem)
++ #define SEM_WAIT(Sem)   while(sem_wait(&Sem)==-1) print_message("Warning: sem_wait failed: %s",strerror(errno));
++#endif
++
++#endif
+
+From 53d24e72f37fe519b80451deebeee9d3319b465c Mon Sep 17 00:00:00 2001
+From: Sam Mulvey <sam@vis.nu>
+Date: Fri, 1 Sep 2017 15:42:38 -0700
+Subject: [PATCH 04/29] added --jack-name -jn flags for changing the name of
+ jack_capture in the patchbay
+
+---
+ jack_capture.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 2fdf57c..89f7466 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -164,6 +164,7 @@ static int total_overruns=0;
+ static int total_xruns=0;
+ 
+ static volatile int freewheel_mode=0;
++static char *jackname="jack_capture";
+ 
+ 
+ /* Disk thread */
+@@ -2145,7 +2146,7 @@ static void start_jack(void){
+   if(I_am_already_called) // start_jack is called more than once if the --port argument has been used.
+     return;
+ 
+-  client=new_jack_client("jack_capture");
++  client=new_jack_client(jackname);
+ 
+   jack_samplerate=jack_get_sample_rate(client);
+   block_size=jack_get_buffer_size(client);
+@@ -2244,6 +2245,7 @@ static const char *advanced_help =
+   "                                    (not implemented yet)\n"
+   "[--jack-freewheeling]/[-jf]      -> Start program, but do not start recording until jack enters freewheeling mode\n"
+   "                                    When jack leaves freewheeling, the recording is also stopped, and the program ends.\n"
++  "[--jack-name]/[-jn]              -> Set name of this jack_capture instance in the jack patchbay.\n"
+   "[--manual-connections]/[-mc]     -> jack_capture will not connect any ports for you. \n"
+   "[--bufsize s] or [-B s]          -> Initial/minimum buffer size in seconds. Default is 8 seconds\n"
+   "                                    for mp3 files, and 4 seconds for all other formats.\n" 
+@@ -2409,6 +2411,7 @@ void init_arguments(int argc, char *argv[]){
+       OPTARG("--rotatefile","-Rf") rotateframe = OPTARG_GETINT();
+       OPTARG("--timemachine","-tm") timemachine_mode = true;
+       OPTARG("--timemachine-prebuffer","-tmpb") timemachine_prebuffer=OPTARG_GETFLOAT();
++	  OPTARG("--jack-name","-jn") jackname=OPTARG_GETSTRING();
+       OPTARG_LAST() base_filename=OPTARG_GETSTRING();
+     }OPTARGS_END;
+ 
+
+From 2e6cc9ec09f41d029a2fbafa546834bfdab3ccbe Mon Sep 17 00:00:00 2001
+From: Sam Mulvey <sam@vis.nu>
+Date: Sat, 2 Sep 2017 09:52:52 -0700
+Subject: [PATCH 05/29] -mp3s options to set lame_set_out_samplerate to
+ something other than jack's samplerate -- to allow mp3 capture with high
+ jackd sample rates
+
+---
+ jack_capture.c | 130 ++++++++++++++++++++++++++-----------------------
+ 1 file changed, 69 insertions(+), 61 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 89f7466..b3cb3d4 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -134,6 +134,7 @@ static bool write_to_stdout=false;
+ static bool write_to_mp3 = false;
+ static int das_lame_quality = 2; // 0 best, 9 worst.
+ static int das_lame_bitrate = -1;
++static int das_lame_samplerate = 0;
+ static bool use_jack_transport = false;
+ static bool use_jack_freewheel = false;
+ static bool use_manual_connections = false;
+@@ -1111,7 +1112,12 @@ static int open_mp3file(void){
+   lame_set_num_channels(lame, num_channels);
+ 
+   lame_set_in_samplerate(lame,(int)jack_samplerate);
+-  lame_set_out_samplerate(lame,(int)jack_samplerate);
++
++  if ((int)das_lame_samplerate == 0) {
++	  lame_set_out_samplerate(lame,(int)jack_samplerate);
++  } else {
++	  lame_set_out_samplerate(lame,(int)das_lame_samplerate);
++  }
+   
+   lame_set_quality(lame,das_lame_quality);
+ 
+@@ -2203,70 +2209,71 @@ static const char *advanced_help =
+   "\n"
+   "\n"
+   "Additional arguments:\n"
+-  "[--recording-time n] or [-d n]   -> Recording is stopped after \"n\" seconds.\n"
++  "[--recording-time n] or [-d n]    -> Recording is stopped after \"n\" seconds.\n"
+   "                                    This options also starts jack_capture in --no-stdin mode.\n"
+   "                                    To stop recording before the timeout, one can press Ctrl-C.)\n"
+-  "[--filename-prefix s]/[-fp n]    -> Sets first part of the autogenerated filename.\n"
++  "[--filename-prefix s]/[-fp n]     -> Sets first part of the autogenerated filename.\n"
+   "                                    (default is \"jack_capture_\")\n"
+-  "[--leading-zeros n] or [-z n]    -> \"n\" is the number of zeros to in the autogenerated filename.\n"
++  "[--leading-zeros n] or [-z n]     -> \"n\" is the number of zeros to in the autogenerated filename.\n"
+   "                                    (-z 2 -> jack_capture_001.wav, and so on.) (default is 1)\n"
+-  "[--format format] or [-f format] -> Selects fileformat provided by libsndfile.\n"
+-  "                                    See http://www.mega-nerd.com/libsndfile/api.html#open\n"
+-  "                                    (Default is wav for 1 or 2 channels, and wavex for more than 2.)\n"
+-  "[--print-formats] or [-pf]       -> Prints all sound formats provided to sndfile to screen and then\n"
+-  "                                    exits.\n"
+-  "[--version] or [-v]              -> Prints out version.\n"
+-  "[--silent] or [-s]               -> Suppresses some common messages printed to the terminal.\n"
+-  "[--absolutely-silent] or [-as]   -> Suppresses all messages printed to the terminal.\n"
+-  "                                    Warning: libraries used by jack_capture may still print messages.\n"
+-  "[--verbose] or [-V]              -> Prints some extra information to the terminal.\n"
+-  "[--mp3] or [-mp3]                -> Writes to an mp3 file using liblame (LAME).\n"
+-  "                                    (the --format option has no effect using this option)\n"
+-  "[--mp3-quality n] or [-mp3q n]   -> Selects mp3 quality provided by liblame. n=0 is best, n=9 is worst.\n"
+-  "                                    Default n is 2. (0 uses the most amount of CPU, 9 uses the least)\n"
+-  "[--mp3-bitrate n] or [-mp3b n]   -> Selects mp3 bitrate (in kbit/s).\n"
+-  "                                    Default is set by liblame. (currently 128)\n"
+-  "[--write-to-stdout] or [-ws]     -> Writes 16 bit little endian to stdout. (the --format option, the\n"
+-  "                                    --mp3 option, and some others have no effect using this option)\n"
+-  "[--disable-meter] or [-dm]       -> Disable console meter.\n"
+-  "[--hide-buffer-usage] or [-hbu]  -> Disable buffer usage updates in the console.\n"
+-  "[--disable-console] or [-dc]     -> Disable console updates. Same as \"-dm -hbu\".\n"
+-  "[--no-stdin] or [-ns]            -> Don't read the console. (i.e pressing return won't stop recording.)\n"
+-  "[--daemon]                       -> Same as writing \"--no-stdin --absolutely-silent\".\n"
+-  "[--linear-meter] or [-lm]        -> Use linear scale for the console meter (default is dB scale)\n"
+-  "[--dB-meter-reference or [-dBr]  -> Specify reference level for dB meter. (default=0)\n"
+-  "[--meterbridge] or [-mb]         -> Start up meterbridge to monitor recorded sound.\n"
+-  "[--meterbridge-type] or [-mt]    -> Specify type. vu (default), ppm, dpm, jf or sco.\n"
+-  "[--meterbridge-reference]/[-mr]  -> Specify reference level for meterbidge.\n"
+-  "[--jack-transport]/[-jt]         -> Start program, but do not start recording until jack transport has started rolling\n"
+-  "                                    When jack transport stops, the recording is also stopped, and the program ends.\n"
+-  "[--jack-transport-multi]/[-jtm]  -> Similar to --jack-transport, but do not end program when jack transport stops.\n"
+-  "                                    Instead, record to a new file when jack_transport starts rolling again.\n"
+-  "                                    (not implemented yet)\n"
+-  "[--jack-freewheeling]/[-jf]      -> Start program, but do not start recording until jack enters freewheeling mode\n"
+-  "                                    When jack leaves freewheeling, the recording is also stopped, and the program ends.\n"
+-  "[--jack-name]/[-jn]              -> Set name of this jack_capture instance in the jack patchbay.\n"
+-  "[--manual-connections]/[-mc]     -> jack_capture will not connect any ports for you. \n"
+-  "[--bufsize s] or [-B s]          -> Initial/minimum buffer size in seconds. Default is 8 seconds\n"
+-  "                                    for mp3 files, and 4 seconds for all other formats.\n" 
+-  "[--maxbufsize] or [-MB]          -> Maximum buffer size in seconds jack_capture will allocate.\n"
+-  "                                    Default is 40. (Buffer is automatically increased during\n"
+-  "                                    recording when needed. But it will never go beyond this size.)\n"
+-  "[--filename] or [-fn]            -> Specify filename.\n"
+-  "                                    Beware that you might risk overwriting an old file by using this option.\n"
+-  "                                    To only set prefix, use --filename-prefix / -fp instead.\n"
+-  "                                    (It's usually easier to set last argument instead of using this option)\n"
+-  "[--osc] or [-O]                  -> Specify OSC port number to listen on. see --help-osc\n"
+-  "[--timestamp] or [-S]            -> create a FILENAME.tme file for each recording, storing\n"
+-  "                                    the system-time corresponding to the first audio sample.\n"
+-  "[--rotatefile N] or [-Rf N]      -> force rotate files every N audio-frames.\n"
+-  "[--hook-open c] or [-Ho c]       -> command to execute on successful file-open. (see below)\n"
+-  "[--hook-close c] or [-Hc c]      -> command to execute when closing the session. (see below)\n"
+-  "[--hook-rotate c] or [-Hr c]     -> command to execute on file-name-rotation. (see below)\n"
+-  "[--hook-timing c] or [-Ht c]     -> callback when first audio frame is received. (see below)\n"
+-  "[--timemachine] or [-tm]         -> jack_capture operates in \"timemachine\" mode.\n"
+-  "[--timemachine-prebuffer s]      -> Specify (in seconds) how long time to prebuffer in timemachine mode.\n"
+-  "[ -tmpb s]                       -> ------------------------ \"\" ----------------------------------------\n"
++  "[--format format] or [-f format]  -> Selects fileformat provided by libsndfile.\n"
++  "                                     See http://www.mega-nerd.com/libsndfile/api.html#open\n"
++  "                                     (Default is wav for 1 or 2 channels, and wavex for more than 2.)\n"
++  "[--print-formats] or [-pf]        -> Prints all sound formats provided to sndfile to screen and then\n"
++  "                                     exits.\n"
++  "[--version] or [-v]               -> Prints out version.\n"
++  "[--silent] or [-s]                -> Suppresses some common messages printed to the terminal.\n"
++  "[--absolutely-silent] or [-as]    -> Suppresses all messages printed to the terminal.\n"
++  "                                     Warning: libraries used by jack_capture may still print messages.\n"
++  "[--verbose] or [-V]               -> Prints some extra information to the terminal.\n"
++  "[--mp3] or [-mp3]                 -> Writes to an mp3 file using liblame (LAME).\n"
++  "                                     (the --format option has no effect using this option)\n"
++  "[--mp3-quality n] or [-mp3q n]    -> Selects mp3 quality provided by liblame. n=0 is best, n=9 is worst.\n"
++  "                                     Default n is 2. (0 uses the most amount of CPU, 9 uses the least)\n"
++  "[--mp3-bitrate n] or [-mp3b n]    -> Selects mp3 bitrate (in kbit/s).\n"
++  "                                     Default is set by liblame. (currently 128)\n"
++  "[--mp3-samplerate n] or [-mp3s n] -> Sets output sample rate for LAME\n"
++  "[--write-to-stdout] or [-ws]      -> Writes 16 bit little endian to stdout. (the --format option, the\n"
++  "                                     --mp3 option, and some others have no effect using this option)\n"
++  "[--disable-meter] or [-dm]        -> Disable console meter.\n"
++  "[--hide-buffer-usage] or [-hbu]   -> Disable buffer usage updates in the console.\n"
++  "[--disable-console] or [-dc]      -> Disable console updates. Same as \"-dm -hbu\".\n"
++  "[--no-stdin] or [-ns]             -> Don't read the console. (i.e pressing return won't stop recording.)\n"
++  "[--daemon]                        -> Same as writing \"--no-stdin --absolutely-silent\".\n"
++  "[--linear-meter] or [-lm]         -> Use linear scale for the console meter (default is dB scale)\n"
++  "[--dB-meter-reference or [-dBr]   -> Specify reference level for dB meter. (default=0)\n"
++  "[--meterbridge] or [-mb]          -> Start up meterbridge to monitor recorded sound.\n"
++  "[--meterbridge-type] or [-mt]     -> Specify type. vu (default), ppm, dpm, jf or sco.\n"
++  "[--meterbridge-reference]/[-mr]   -> Specify reference level for meterbidge.\n"
++  "[--jack-transport]/[-jt]          -> Start program, but do not start recording until jack transport has started rolling\n"
++  "                                     When jack transport stops, the recording is also stopped, and the program ends.\n"
++  "[--jack-transport-multi]/[-jtm]   -> Similar to --jack-transport, but do not end program when jack transport stops.\n"
++  "                                     Instead, record to a new file when jack_transport starts rolling again.\n"
++  "                                     (not implemented yet)\n"
++  "[--jack-freewheeling]/[-jf]       -> Start program, but do not start recording until jack enters freewheeling mode\n"
++  "                                     When jack leaves freewheeling, the recording is also stopped, and the program ends.\n"
++  "[--jack-name]/[-jn]               -> Set name of this jack_capture instance in the jack patchbay.\n"
++  "[--manual-connections]/[-mc]      -> jack_capture will not connect any ports for you. \n"
++  "[--bufsize s] or [-B s]           -> Initial/minimum buffer size in seconds. Default is 8 seconds\n"
++  "                                     for mp3 files, and 4 seconds for all other formats.\n" 
++  "[--maxbufsize] or [-MB]           -> Maximum buffer size in seconds jack_capture will allocate.\n"
++  "                                     Default is 40. (Buffer is automatically increased during\n"
++  "                                     recording when needed. But it will never go beyond this size.)\n"
++  "[--filename] or [-fn]             -> Specify filename.\n"
++  "                                     Beware that you might risk overwriting an old file by using this option.\n"
++  "                                     To only set prefix, use --filename-prefix / -fp instead.\n"
++  "                                     (It's usually easier to set last argument instead of using this option)\n"
++  "[--osc] or [-O]                   -> Specify OSC port number to listen on. see --help-osc\n"
++  "[--timestamp] or [-S]             -> create a FILENAME.tme file for each recording, storing\n"
++  "                                     the system-time corresponding to the first audio sample.\n"
++  "[--rotatefile N] or [-Rf N]       -> force rotate files every N audio-frames.\n"
++  "[--hook-open c] or [-Ho c]        -> command to execute on successful file-open. (see below)\n"
++  "[--hook-close c] or [-Hc c]       -> command to execute when closing the session. (see below)\n"
++  "[--hook-rotate c] or [-Hr c]      -> command to execute on file-name-rotation. (see below)\n"
++  "[--hook-timing c] or [-Ht c]      -> callback when first audio frame is received. (see below)\n"
++  "[--timemachine] or [-tm]          -> jack_capture operates in \"timemachine\" mode.\n"
++  "[--timemachine-prebuffer s]       -> Specify (in seconds) how long time to prebuffer in timemachine mode.\n"
++  "[ -tmpb s]                        -> ------------------------ \"\" ----------------------------------------\n"
+   "\n"
+   " All hook options take a full-path to an executable as argument.\n"
+   " The commands are executed in a fire-and-forget style upon internal events.\n"
+@@ -2380,6 +2387,7 @@ void init_arguments(int argc, char *argv[]){
+       OPTARG("--mp3","-mp3") write_to_mp3 = true;
+       OPTARG("--mp3-quality","-mp3q") das_lame_quality = OPTARG_GETINT(); write_to_mp3 = true;
+       OPTARG("--mp3-bitrate","-mp3b") das_lame_bitrate = OPTARG_GETINT(); write_to_mp3 = true;
++	  OPTARG("--mp3-samplerate", "-mp3s") das_lame_samplerate = OPTARG_GETINT(); write_to_mp3 = true;
+       OPTARG("--write-to-stdout","-ws") write_to_stdout=true;use_vu=false;show_bufferusage=false;
+       OPTARG("--disable-meter","-dm") use_vu=false;
+       OPTARG("--hide-buffer-usage","-hbu") show_bufferusage=false;
+
+From 87ee2db27feb4afc011058d2f0bb800e3b910b13 Mon Sep 17 00:00:00 2001
+From: "Sam Mulvey (mercury)" <sam@vis.nu>
+Date: Sun, 14 Jan 2018 00:17:38 -0800
+Subject: [PATCH 06/29] tested maxlength for jack
+
+---
+ jack_capture.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index b3cb3d4..25bc502 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -165,7 +165,7 @@ static int total_overruns=0;
+ static int total_xruns=0;
+ 
+ static volatile int freewheel_mode=0;
+-static char *jackname="jack_capture";
++static char *jackname="jack_capture"; // limited to 33 characters
+ 
+ 
+ /* Disk thread */
+
+From f6f7968b3bf9025636660b23847189d55a290b28 Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Fri, 2 Nov 2018 12:49:21 +0100
+Subject: [PATCH 07/29] OPTARG_GETBOOL
+
+---
+ jack_capture.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 2fdf57c..7420f85 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -84,6 +84,7 @@ void shutdown_osc(void);
+ //#define OPTARG_GETINT() OPTARGS_CHECK_GET(0,(optargs_inttemp=strtol(argv[++lokke],(char**)NULL,10),errno!=0?(perror("strtol"),0):optargs_inttemp))
+ #define OPTARG_GETFLOAT() OPTARGS_CHECK_GET(0.0f,atof(argv[++lokke]))
+ #define OPTARG_GETSTRING() OPTARGS_CHECK_GET("",argv[++lokke])
++#define OPTARG_GETBOOL() ({const char *response = OPTARG_GETSTRING(); !strcasecmp(response,"false") ? false : !strcasecmp(response,"true") ? true : (fprintf(stderr,"Argument for '%s' must be \"false\" or \"true\"\n",argv[lokke-1]), exit(-5) , false);})
+ #define OPTARG_LAST() }}else if(lokke==argc-1 && argv[lokke][0]!='-'){lokke--;{
+ #define OPTARGS_ELSE() }else if(1){
+ #define OPTARGS_END }else{fprintf(stderr,"%s",usage);exit(-1);}}}
+
+From f26c128e92ac988f51d75bc18d617fa96379f8a8 Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Tue, 20 Aug 2019 17:25:17 +0200
+Subject: [PATCH 08/29] README: Added BUILD and INSTALL sections (Fix for #28)
+
+---
+ README | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/README b/README
+index b813b59..b1eb2e3 100644
+--- a/README
++++ b/README
+@@ -69,8 +69,6 @@ Other features:
+   local hard drive. (tested on icore7)
+ 
+ 
+-
+-
+ COMMON USAGE 
+ ************
+ $ jack_capture
+@@ -204,6 +202,18 @@ To record a stereo file from the soundcard:
+ 
+ 
+ 
++BUILD
++*****
++make
++
++
++
++INSTALL
++*******
++PREFIX=/usr/local make install
++
++
++
+ 
+ ACKNOWLEDGMENT
+ **************
+
+From ebc43893a9c18d0f11438078f4a071b082afa691 Mon Sep 17 00:00:00 2001
+From: "F.Fitzgerald" <mrffitzgerald@runbox.com>
+Date: Thu, 7 Nov 2019 13:24:58 +0000
+Subject: [PATCH 09/29] If no format argument is provided try to determine the
+ file format from the output filename. "jack_capture output.ogg" will produce
+ an ogg file
+
+---
+ jack_capture.c | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 25bc502..d3f659f 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -2206,6 +2206,7 @@ static const char *advanced_help =
+   "           Beware that you might risk overwriting an old file by using this option.\n"
+   "           By not using this option, you will not overwrite an old file.\n"
+   "           See also the option --filename-prefix\n"
++  "           If the filename has a valid file extension then this will be used to format the output file.\n" 
+   "\n"
+   "\n"
+   "Additional arguments:\n"
+@@ -2218,6 +2219,7 @@ static const char *advanced_help =
+   "                                    (-z 2 -> jack_capture_001.wav, and so on.) (default is 1)\n"
+   "[--format format] or [-f format]  -> Selects fileformat provided by libsndfile.\n"
+   "                                     See http://www.mega-nerd.com/libsndfile/api.html#open\n"
++  "                                     This option will overwrite any format specified in the output filename.\n"
+   "                                     (Default is wav for 1 or 2 channels, and wavex for more than 2.)\n"
+   "[--print-formats] or [-pf]        -> Prints all sound formats provided to sndfile to screen and then\n"
+   "                                     exits.\n"
+@@ -2298,6 +2300,9 @@ static const char *advanced_help =
+   "To record a stereo file of what you hear in the mp3 format:\n"
+   " $jack_capture -mp3\n"
+   "\n"
++  "To record a named stereo file of what you hear in the ogg format:\n"
++  " $jack_capture output.ogg\n"
++  "\n"
+   "To record a stereo file of what you hear in the wav format:\n"
+   "  $jack_capture --port system:playback_1 --port system:playback_2\n"
+   "****************************************************************************\n"
+@@ -2443,6 +2448,29 @@ void init_arguments(int argc, char *argv[]){
+       min_buffer_time = DEFAULT_MIN_BUFFER_TIME;
+   }
+ 
++  verbose_print("main() determine file format from filename\n");
++  // If no format specified try to determine format from the base_filename
++  if(!soundfile_format_is_set && base_filename) {
++    char *ext = strrchr(base_filename, '.');
++    if(ext) {
++      ext++; // skip leading .
++      soundfile_format = ext;
++      soundfile_format_is_set = true;
++
++      // handle mp3
++      if(strcmp(soundfile_format, "mp3") == 0) {
++#if HAVE_LAME
++        write_to_mp3 = true;
++        if(min_buffer_time == DEFAULT_MIN_BUFFER_TIME) // this was set before we knew it was mp3 format
++          min_buffer_time = DEFAULT_MIN_MP3_BUFFER_TIME;
++#else
++        fprintf(stderr,"mp3 not supported. liblame was not installed when compiling jack_capture\n");
++        exit(2);
++#endif
++      }
++    }
++  }
++
+   if(timemachine_mode==true) {
+     min_buffer_time += timemachine_prebuffer;
+     max_buffer_time += timemachine_prebuffer;
+
+From fd42db0d0dd8d563575186b8e6ceca40d24a7a2e Mon Sep 17 00:00:00 2001
+From: "F.Fitzgerald" <mrffitzgerald@runbox.com>
+Date: Thu, 7 Nov 2019 13:33:02 +0000
+Subject: [PATCH 10/29] altered handling mp3 buffer length to be less brittle
+
+---
+ jack_capture.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index d3f659f..c1bba8d 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -2460,8 +2460,9 @@ void init_arguments(int argc, char *argv[]){
+       // handle mp3
+       if(strcmp(soundfile_format, "mp3") == 0) {
+ #if HAVE_LAME
+-        write_to_mp3 = true;
+-        if(min_buffer_time == DEFAULT_MIN_BUFFER_TIME) // this was set before we knew it was mp3 format
++        write_to_mp3 = true; 
++        // the min_buffer_time may have been set before we knew it was mp3 format
++        if(min_buffer_time<=0.0f || min_buffer_time == DEFAULT_MIN_BUFFER_TIME)
+           min_buffer_time = DEFAULT_MIN_MP3_BUFFER_TIME;
+ #else
+         fprintf(stderr,"mp3 not supported. liblame was not installed when compiling jack_capture\n");
+
+From 5e8dc68edaebcec12894d0641acaec517a8380ee Mon Sep 17 00:00:00 2001
+From: "F.Fitzgerald" <mrffitzgerald@runbox.com>
+Date: Thu, 7 Nov 2019 13:33:25 +0000
+Subject: [PATCH 11/29] updated documentation
+
+---
+ README | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/README b/README
+index b1eb2e3..b5937f6 100644
+--- a/README
++++ b/README
+@@ -88,6 +88,7 @@ jack_capture  [--bitdepth n] [--channels n] [--port port] [filename]
+            Beware that you might risk overwriting an old file by using this option.
+            By not using this option, you will not overwrite an old file.
+            See also the option --filename-prefix
++           If the filename has a valid file extension then this will be used to format the output file. 
+ 
+ 
+ Additional arguments:
+@@ -100,6 +101,7 @@ Additional arguments:
+                                     (-z 2 -> jack_capture_001.wav, and so on.) (default is 1)
+ [--format format] or [-f format] -> Selects fileformat provided by libsndfile.
+                                     See http://www.mega-nerd.com/libsndfile/api.html#open
++                                    This option will overwrite any format specified in the output filename.
+                                     (Default is wav for 1 or 2 channels, and wavex for more than 2.)
+ [--print-formats] or [-pf]       -> Prints all sound formats provided to sndfile to screen and then
+                                     exits.
+@@ -178,6 +180,9 @@ To record a stereo file of what you hear in the ogg format:
+ To record a stereo file of what you hear in the mp3 format:
+  $jack_capture -mp3
+ 
++To record a named stereo file of what you hear in the ogg format:
++ $jack_capture output.ogg
++
+ To record a stereo file of what you hear in the wav format:
+   $jack_capture --port system:playback_1 --port system:playback_2
+ ****************************************************************************
+
+From 3f0beaa5ccf3560fa5629815e02c05d74c7f6937 Mon Sep 17 00:00:00 2001
+From: "F.Fitzgerald" <mrffitzgerald@runbox.com>
+Date: Thu, 7 Nov 2019 13:35:16 +0000
+Subject: [PATCH 12/29] removed trailing space
+
+---
+ README | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/README b/README
+index b5937f6..a818f95 100644
+--- a/README
++++ b/README
+@@ -88,7 +88,7 @@ jack_capture  [--bitdepth n] [--channels n] [--port port] [filename]
+            Beware that you might risk overwriting an old file by using this option.
+            By not using this option, you will not overwrite an old file.
+            See also the option --filename-prefix
+-           If the filename has a valid file extension then this will be used to format the output file. 
++           If the filename has a valid file extension then this will be used to format the output file.
+ 
+ 
+ Additional arguments:
+
+From cd6e62f1209f38ee3cda2b16b8305bf9e59438bb Mon Sep 17 00:00:00 2001
+From: "F.Fitzgerald" <mrffitzgerald@runbox.com>
+Date: Thu, 7 Nov 2019 14:02:22 +0000
+Subject: [PATCH 13/29] Made documentation clearer
+
+---
+ README         | 4 +++-
+ jack_capture.c | 4 +++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/README b/README
+index a818f95..259082f 100644
+--- a/README
++++ b/README
+@@ -89,6 +89,7 @@ jack_capture  [--bitdepth n] [--channels n] [--port port] [filename]
+            By not using this option, you will not overwrite an old file.
+            See also the option --filename-prefix
+            If the filename has a valid file extension then this will be used to format the output file.
++           So that "jack_capture output.ogg" will produce an ogg file, unless a format argument is provided.
+ 
+ 
+ Additional arguments:
+@@ -101,7 +102,7 @@ Additional arguments:
+                                     (-z 2 -> jack_capture_001.wav, and so on.) (default is 1)
+ [--format format] or [-f format] -> Selects fileformat provided by libsndfile.
+                                     See http://www.mega-nerd.com/libsndfile/api.html#open
+-                                    This option will overwrite any format specified in the output filename.
++                                    This option will overwrite any format specified by the output filename.
+                                     (Default is wav for 1 or 2 channels, and wavex for more than 2.)
+ [--print-formats] or [-pf]       -> Prints all sound formats provided to sndfile to screen and then
+                                     exits.
+@@ -111,6 +112,7 @@ Additional arguments:
+                                     Warning: libraries used by jack_capture may still print messages.
+ [--verbose] or [-V]              -> Prints some extra information to the terminal.
+ [--mp3] or [-mp3]                -> Writes to an mp3 file using liblame (LAME).
++                                    This option will overwrite any format specified by the output filename.
+                                     (the --format option has no effect using this option)
+ [--mp3-quality n] or [-mp3q n]   -> Selects mp3 quality provided by liblame. n=0 is best, n=9 is worst.
+                                     Default n is 2. (0 uses the most amount of CPU, 9 uses the least)
+diff --git a/jack_capture.c b/jack_capture.c
+index c1bba8d..a1f59ad 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -2207,6 +2207,7 @@ static const char *advanced_help =
+   "           By not using this option, you will not overwrite an old file.\n"
+   "           See also the option --filename-prefix\n"
+   "           If the filename has a valid file extension then this will be used to format the output file.\n" 
++  "           So that \"jack_capture ouput.ogg\" will produce an ogg file, unless a format argument is provided.\n"
+   "\n"
+   "\n"
+   "Additional arguments:\n"
+@@ -2219,7 +2220,7 @@ static const char *advanced_help =
+   "                                    (-z 2 -> jack_capture_001.wav, and so on.) (default is 1)\n"
+   "[--format format] or [-f format]  -> Selects fileformat provided by libsndfile.\n"
+   "                                     See http://www.mega-nerd.com/libsndfile/api.html#open\n"
+-  "                                     This option will overwrite any format specified in the output filename.\n"
++  "                                     This option will overwrite any format specified by the output filename.\n"
+   "                                     (Default is wav for 1 or 2 channels, and wavex for more than 2.)\n"
+   "[--print-formats] or [-pf]        -> Prints all sound formats provided to sndfile to screen and then\n"
+   "                                     exits.\n"
+@@ -2229,6 +2230,7 @@ static const char *advanced_help =
+   "                                     Warning: libraries used by jack_capture may still print messages.\n"
+   "[--verbose] or [-V]               -> Prints some extra information to the terminal.\n"
+   "[--mp3] or [-mp3]                 -> Writes to an mp3 file using liblame (LAME).\n"
++  "                                     This option will overwrite any format specified by the output filename.\n"
+   "                                     (the --format option has no effect using this option)\n"
+   "[--mp3-quality n] or [-mp3q n]    -> Selects mp3 quality provided by liblame. n=0 is best, n=9 is worst.\n"
+   "                                     Default n is 2. (0 uses the most amount of CPU, 9 uses the least)\n"
+
+From d07a707810d6dac8751c9da8b22d57ded16bb782 Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Sat, 9 Nov 2019 10:10:55 +0100
+Subject: [PATCH 14/29] Fix the "Warning, the format ... is not supported"
+ error messages. Arguments for printf were switched.
+
+---
+ jack_capture.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 095c3a2..04f3d00 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -1192,10 +1192,10 @@ static int open_soundfile(void){
+   {
+     int format=getformat(soundfile_format);
+     if(format==-1 && num_channels>2){
+-      fprintf(stderr,"Warning, the format \"%s\" is not supported. Using %s instead.\n",soundfile_format_multi,soundfile_format);
++      fprintf(stderr,"Warning, the format \"%s\" is not supported. Using \"%s\" instead.\n", soundfile_format, soundfile_format_multi);
+       sf_info.format=MORE_THAN_TWO_CHANNELS_FORMAT;
+     }else if(format==-1){
+-      fprintf(stderr,"Warning, the format \"%s\" is not supported. Using %s instead.\n",soundfile_format_one_or_two,soundfile_format);
++      fprintf(stderr,"Warning, the format \"%s\" is not supported. Using \"%s\" instead.\n", soundfile_format, soundfile_format_one_or_two);
+       sf_info.format=ONE_OR_TWO_CHANNELS_FORMAT;
+     }else
+       sf_info.format=format;
+
+From 6e2a83e399a23a8a5e4b60edde75a6016d94acd0 Mon Sep 17 00:00:00 2001
+From: dx9s <dx9s@dx9s.net>
+Date: Wed, 26 Feb 2020 10:22:31 -0800
+Subject: [PATCH 15/29] Fix whitespaces
+
+Minor inconsistencies fixed to match entire file
+
+(made this seperate commit so feature can be reviewed better)
+---
+ jack_capture.c | 160 ++++++++++++++++++++++++-------------------------
+ 1 file changed, 80 insertions(+), 80 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 04f3d00..c441050 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -1,7 +1,7 @@
+ 
+ /*
+   Kjetil Matheussen, 2005-2013.
+-    
++
+     This program is free software; you can redistribute it and/or modify
+     it under the terms of the GNU General Public License as published by
+     the Free Software Foundation; either version 2 of the License, or
+@@ -256,7 +256,7 @@ static bool set_high_priority(void){
+ 
+   while(prio<0 && setpriority(PRIO_PROCESS,0,prio)==-1)
+     prio++;
+-  
++
+   if(prio==0 && shown_warning==false){
+     print_message("Warning. Could not set higher priority for a SCHED_OTHER process using setpriority().\n");
+     shown_warning=true; }
+@@ -374,7 +374,7 @@ static void buffers_init(){
+   vringbuffer = vringbuffer_create(JC_MAX(4,seconds_to_buffers(min_buffer_time)),
+                                    JC_MAX(4,seconds_to_buffers(max_buffer_time)),
+                                    buffer_size_in_bytes);
+-                                   
++
+   if(vringbuffer==NULL){
+     fprintf(stderr,"Unable to allocate memory for buffers\n");
+     exit(-1);
+@@ -475,13 +475,13 @@ static void portnames_add(char *name){
+     int ch;
+ 
+     cportnames=realloc(cportnames,(num_cportnames+add_ch)*sizeof(char*));
+-    
++
+     for(ch=0;ch<add_ch;ch++){
+       cportnames[num_cportnames]=new_outportnames[ch];
+       //fprintf(stderr,"ch: %d, num_ch: %d, new_outportnames[ch]: %s, %s\n",ch,num_cportnames,new_outportnames[ch],new_outportnames[ch+1]);
+       num_cportnames++;
+     }
+-    
++
+   }else{
+     fprintf(stderr,"\nWarning, no port(s) with name \"%s\".\n",name);
+     if(cportnames==NULL)
+@@ -492,10 +492,10 @@ static void portnames_add(char *name){
+ 
+ static const char **portnames_get_connections(int ch, bool *using_calloc){
+   *using_calloc = true; // silence compiler warning. (fix: logic of program is too complicated)
+-  
++
+   if(ch>=num_cportnames)
+     return NULL;
+-  else{      
++  else{
+     jack_port_t  *port = jack_port_by_name(client,cportnames[ch]);
+     const char  **ret;
+ 
+@@ -512,7 +512,7 @@ static const char **portnames_get_connections(int ch, bool *using_calloc){
+       ret[0] = cportnames[ch];
+       *using_calloc = true;
+     }
+-    
++
+     return ret;
+   }
+ }
+@@ -532,7 +532,7 @@ static const char **portnames_get_connections(int ch, bool *using_calloc){
+ // Function iec_scale picked from meterbridge by Steve Harris.
+ static int iec_scale(float db) {
+          float def = 0.0f; /* Meter deflection %age */
+- 
++
+          if (db < -70.0f) {
+                  def = 0.0f;
+          } else if (db < -60.0f) {
+@@ -550,7 +550,7 @@ static int iec_scale(float db) {
+          } else {
+                  def = 100.0f;
+          }
+- 
++
+          return (int)(def * 2.0f);
+ }
+ 
+@@ -569,7 +569,7 @@ static void print_console_top(void){
+     char c='"';
+     // Set cyan color
+     printf("%c[36m",0x1b);
+-    
++
+     //printf("****");
+     printf("   |");
+     for(lokke=0;lokke<vu_len;lokke++)
+@@ -637,12 +637,12 @@ static void print_console(bool move_cursor_to_top_doit,bool force_update){
+       float val   = vu_vals[ch];
+       int   pos;
+       vu_vals[ch] = -1.0f;
+-      
++
+       if(vu_dB)
+         pos = iec_scale(20.0f * log10f(val * vu_bias)) * (vu_len) / 200;
+       else
+         pos = val*(vu_len);
+-      
++
+       if (pos > vu_peaks[ch]) {
+         vu_peaks[ch]    = pos;
+         vu_peakvals[ch] = val;
+@@ -651,7 +651,7 @@ static void print_console(bool move_cursor_to_top_doit,bool force_update){
+         vu_peaks[ch]    = pos;
+         vu_peakvals[ch] = val;
+       }
+-      
++
+       if(ch>9){
+         vol[0] = '0'+ch/10;
+         vol[1] = '0'+ch-(10*(ch/10));
+@@ -659,7 +659,7 @@ static void print_console(bool move_cursor_to_top_doit,bool force_update){
+         vol[0] = '0';
+         vol[1] = '0'+ch;
+       }
+-      
++
+       if (timemachine_mode==true && timemachine_recording==false) {
+ 
+         for(i=0;i<pos && val>0.0f;i++)
+@@ -737,7 +737,7 @@ static void print_console(bool move_cursor_to_top_doit,bool force_update){
+            //fmaxf(0.0f,buflen-bufleft),buflen,
+            0x1b, // green color
+            buffer_string,
+-           recorded_minutes, recorded_seconds%60<10?"0":"", recorded_seconds%60, recorded_minutes<10?" ":"", 
++           recorded_minutes, recorded_seconds%60<10?"0":"", recorded_seconds%60, recorded_minutes<10?" ":"",
+            disk_thread_has_high_priority?'x':' ',
+            total_overruns,
+            total_xruns,
+@@ -802,7 +802,7 @@ static void *helper_thread_func(void *arg){
+           msleep(5);
+ 	}
+       }
+-      printf(MESSAGE_PREFIX); 
++      printf(MESSAGE_PREFIX);
+       printf("%s",message_string);
+       message_string[0]=0;
+       move_cursor_to_top_doit=false;
+@@ -844,16 +844,16 @@ enum ThreadType{
+ static __thread enum ThreadType g_thread_type = UNINITIALIZED_THREAD_TYPE;
+ 
+ 
+-static pthread_mutex_t print_message_mutex = PTHREAD_MUTEX_INITIALIZER;  
+-void print_message(const char *fmt, ...){  
++static pthread_mutex_t print_message_mutex = PTHREAD_MUTEX_INITIALIZER;
++void print_message(const char *fmt, ...){
+   if (absolutely_silent==true) return;
+ 
+   if (g_thread_type == REALTIME_THREAD)
+     // what?
+     return;
+-    
++
+   if(helper_thread_running==0 || write_to_stdout==true){
+-    
++
+     va_list argp;
+     va_start(argp,fmt);
+     fprintf(stderr,"%c[31m" MESSAGE_PREFIX,0x1b);   // set red color
+@@ -861,14 +861,14 @@ void print_message(const char *fmt, ...){
+     fprintf(stderr,"%c[0m",0x1b); // reset colors
+     fflush(stderr);
+     va_end(argp);
+-    
++
+   }else{
+ 
+     pthread_mutex_lock(&print_message_mutex);{
+ 
+       while(message_string[0]!=0)
+         msleep(2);
+-    
++
+       va_list argp;
+       va_start(argp,fmt);
+       vsprintf(message_string,fmt,argp);
+@@ -899,7 +899,7 @@ static void stop_helper_thread(void){
+   /*
+   if(use_vu||show_bufferusage){
+     printf("%c[0m",0x1b); // reset colors
+-    usleep(1000000/2); // wait for terminal    
++    usleep(1000000/2); // wait for terminal
+   }
+   */
+ }
+@@ -1119,7 +1119,7 @@ static int open_mp3file(void){
+   } else {
+ 	  lame_set_out_samplerate(lame,(int)das_lame_samplerate);
+   }
+-  
++
+   lame_set_quality(lame,das_lame_quality);
+ 
+   if(das_lame_bitrate!=-1){
+@@ -1188,7 +1188,7 @@ static int open_soundfile(void){
+ 
+   sf_info.samplerate = jack_samplerate;
+   sf_info.channels   = num_channels;
+-  
++
+   {
+     int format=getformat(soundfile_format);
+     if(format==-1 && num_channels>2){
+@@ -1217,7 +1217,7 @@ static int open_soundfile(void){
+       bitdepth=24;
+       subformat=SF_FORMAT_PCM_24;
+ #if HAVE_OGG
+-    }else if(!strcasecmp("ogg",soundfile_format)){      
++    }else if(!strcasecmp("ogg",soundfile_format)){
+       subformat = SF_FORMAT_VORBIS;
+ #endif
+     }else{
+@@ -1230,7 +1230,7 @@ static int open_soundfile(void){
+   bytes_per_frame=bitdepth/8;
+ 
+   sf_info.format |= subformat;
+-  
++
+   if(sf_format_check(&sf_info)==0){
+     fprintf (stderr, "\nFileformat not supported by libsndfile. Try other options.\n");
+     return 0;
+@@ -1430,7 +1430,7 @@ static int disk_write(void *data,size_t frames){
+ 
+   if(!handle_filelimit(frames))
+     return 0;
+-  
++
+   if((size_t)sf_writef_float(soundfile,data,frames) != frames){
+     print_message("Error. Can not write sndfile (%s)\n",
+ 		sf_strerror(soundfile)
+@@ -1514,9 +1514,9 @@ static enum vringbuffer_receiver_callback_return_t disk_callback(vringbuffer_t *
+ 
+   disk_thread_control_priority();
+ 
+-  
++
+   if (ATOMIC_COMPARE_AND_SET_INT(g_store_sync, 1, 2)) {
+-    
++
+     hook_rec_timimg(filename, rtime, j_latency);
+ 
+     if (create_tme_file) { /* write .tme info-file */
+@@ -1539,7 +1539,7 @@ static enum vringbuffer_receiver_callback_return_t disk_callback(vringbuffer_t *
+       /* ok, write to file */
+       FILE *file = fopen(string_concat(filename, ".tme"),"w");
+       if(file) {
+-	fprintf(file, "%ld.%ld\n", rtime.tv_sec, rtime.tv_nsec); 
++	fprintf(file, "%ld.%ld\n", rtime.tv_sec, rtime.tv_nsec);
+ 	fprintf(file, "# port-latency: %d frames\n", j_latency);
+ 	fprintf(file, "# sample-rate : %f samples/sec\n", jack_samplerate);
+ 
+@@ -1566,9 +1566,9 @@ static void cleanup_disk(void){
+   // Adding silence at the end. Not much point.
+   if(unreported_overruns>0)
+     disk_write_overruns(unreported_overruns);
+-  
++
+   close_soundfile();
+-  
++
+   if(verbose==true)
+     fprintf(stderr,"disk thread finished\n");
+ }
+@@ -1579,7 +1579,7 @@ static void cleanup_disk(void){
+ 
+ /////////////////////////////////////////////////////////////////////
+ //////////////////////// JACK PROCESS ///////////////////////////////
+-/////////////////////////////////////////////////////////////////////	
++/////////////////////////////////////////////////////////////////////
+ 
+ 
+ static void send_buffer_to_disk_thread(buffer_t *buffer){
+@@ -1644,10 +1644,10 @@ static void process_fill_buffers(int jack_block_size){
+   int i=0,ch;
+ 
+   jack_port_t **ports = ATOMIC_GET(g_ports);
+-  
++
+   for(ch=0;ch<num_channels;ch++)
+     in[ch]=jack_port_get_buffer(ports[ch],jack_block_size);
+-      
++
+   if(current_buffer==NULL && process_new_current_buffer(jack_block_size)==false)
+     return;
+ 
+@@ -1686,7 +1686,7 @@ static int process(jack_nframes_t nframes, void *arg){
+ 
+   if (g_thread_type == UNINITIALIZED_THREAD_TYPE)
+     g_thread_type = REALTIME_THREAD;
+-  
++
+   jack_transport_state_t jack_transport_state=JackTransportStopped;
+ 
+   // jack_transport
+@@ -1719,7 +1719,7 @@ static int process(jack_nframes_t nframes, void *arg){
+     return 0;
+ 
+   jack_port_t **ports = ATOMIC_GET(g_ports);
+-  
++
+   if (ATOMIC_GET(g_store_sync)==0) {
+ #ifndef NEW_JACK_LATENCY_API
+     int ch;
+@@ -1735,7 +1735,7 @@ static int process(jack_nframes_t nframes, void *arg){
+ 
+   if(fixed_duration==true){     // User has specified a duration
+     int num_frames;
+-    
++
+     num_frames=JC_MIN(nframes,num_frames_to_record - ATOMIC_GET(num_frames_recorded));
+ 
+     if(num_frames>0)
+@@ -1750,11 +1750,11 @@ static int process(jack_nframes_t nframes, void *arg){
+     }
+ 
+   }else{
+-    
++
+     process_fill_buffers(nframes);
+-    
++
+     ATOMIC_ADD(num_frames_recorded, nframes);
+-    
++
+     if((   use_jack_transport==true && jack_transport_state==JackTransportStopped)
+        || (use_jack_freewheel==true && freewheel_mode==0)
+        )
+@@ -1763,7 +1763,7 @@ static int process(jack_nframes_t nframes, void *arg){
+         SEM_SIGNAL(stop_sem);
+         process_state=RECORDING_FINISHED;
+       }
+-    
++
+   }
+ 
+   vringbuffer_trigger_autoincrease_callback(vringbuffer);
+@@ -1793,7 +1793,7 @@ static void start_meterbridge(int num_channels){
+ 
+   sprintf(meterbridge_jackname,"%s_meterbridge",jack_get_client_name(client));
+   //meterbridge -t vu -n meterbri xmms-jack_12250_000:out_0 xmms-jack_12250_000:out_1
+-  
++
+   meterbridge_pid=fork();
+   if(meterbridge_pid==0){
+     char *argv[100+num_channels];
+@@ -1812,15 +1812,15 @@ static void start_meterbridge(int num_channels){
+       argv[7+ch]=NULL;
+     }
+ 
+-    
++
+     if(1){ // Same as adding ">/dev/null 2>/dev/null" in a shell
+       int fd;
+       if((fd = open("/dev/null", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR))==-1){
+ 	perror("open");
+-      }else{    
++      }else{
+ 	dup2(fd,STDOUT_FILENO);
+ 	dup2(fd,STDERR_FILENO);
+-	close(fd); 
++	close(fd);
+       }
+     }
+ 
+@@ -1850,7 +1850,7 @@ static int init_meterbridge_ports(){
+     }
+ 
+     {
+-      jack_port_t **ports_meterbridge2 = (jack_port_t **) my_calloc (sizeof (jack_port_t *),num_channels);  
++      jack_port_t **ports_meterbridge2 = (jack_port_t **) my_calloc (sizeof (jack_port_t *),num_channels);
+ 
+       ports_meterbridge2[0]=port1;
+       {
+@@ -1899,7 +1899,7 @@ static int reconnect_ports_questionmark(void){
+   int ch;
+ 
+   jack_port_t **ports = ATOMIC_GET(g_ports);
+-  
++
+   for(ch=0;ch<num_channels;ch++){
+     bool using_calloc;
+     const char **connections1 = portnames_get_connections(ch, &using_calloc);
+@@ -1910,7 +1910,7 @@ static int reconnect_ports_questionmark(void){
+ 
+     if(memb1==0 && memb2==0)
+       continue;
+-      
++
+     if(memb1!=memb2){
+       free_jack_connections(using_calloc, connections1);
+       free_jack_connections(false, connections2);
+@@ -1919,7 +1919,7 @@ static int reconnect_ports_questionmark(void){
+ 
+     qsort(connections1,memb1,sizeof(char*),compare);
+     qsort(connections2,memb2,sizeof(char*),compare);
+-    
++
+     {
+       int lokke = 0;
+       for(lokke=0;lokke<memb1;lokke++){
+@@ -1953,7 +1953,7 @@ static void disconnect_ports(jack_port_t** ports){
+     if(connections)
+       for(;connections[lokke]!=NULL;lokke++)
+         jack_disconnect(client,connections[lokke],jack_port_name(ports[ch]));
+-    
++
+     free_jack_connections(false, connections);
+   }
+ }
+@@ -1975,7 +1975,7 @@ static void connect_ports(jack_port_t** ports){
+       int err=jack_connect(client,connections[lokke],jack_port_name(ports[ch]));
+       if(err!=0)
+ 	print_message("\nCould not connect input port %s to %s, errorcode %s\n",
+-                      jack_port_name (ports[ch]), connections[lokke],strerror(err));      
++                      jack_port_name (ports[ch]), connections[lokke],strerror(err));
+       lokke++;
+     }
+     free_jack_connections(using_calloc, connections);
+@@ -2010,7 +2010,7 @@ static void* connection_thread(void *arg){
+ 	print_message("Reconnecting ports.\n");
+ 
+       jack_port_t **ports = ATOMIC_GET(g_ports);
+-        
++
+       disconnect_ports(ports);
+       connect_ports(ports);
+ 
+@@ -2075,13 +2075,13 @@ static void jack_latency_cb(jack_latency_callback_mode_t mode, void *arg) {
+   int ch;
+   jack_latency_range_t jlty;
+   jack_nframes_t max_latency = 0;
+-  
++
+   if (mode != JackCaptureLatency) return;
+ 
+   jack_port_t **ports = ATOMIC_GET(g_ports);
+-  
++
+   if (!ports) return;
+-  
++
+   for(ch=0;ch<num_channels;ch++) {
+     if(ports[ch]==0) continue;
+     jack_port_get_latency_range(ports[ch], JackCaptureLatency, &jlty);
+@@ -2092,7 +2092,7 @@ static void jack_latency_cb(jack_latency_callback_mode_t mode, void *arg) {
+ #endif
+ 
+ static void create_ports(void){
+-  jack_port_t** ports = my_calloc (sizeof (jack_port_t *),num_channels);  
++  jack_port_t** ports = my_calloc (sizeof (jack_port_t *),num_channels);
+   {
+     int ch;
+     for(ch=0;ch<num_channels;ch++) {
+@@ -2195,7 +2195,7 @@ static void start_keypress_thread(void){
+   pthread_create(&keypress_thread, NULL, keypress_func, NULL);
+ }
+ 
+-static const char *advanced_help = 
++static const char *advanced_help =
+   "jack_capture  [--bitdepth n] [--channels n] [--port port] [filename]\n"
+   "              [ -b        n] [ -c        n] [ -p    port]\n"
+   "\n"
+@@ -2207,7 +2207,7 @@ static const char *advanced_help =
+   "           Beware that you might risk overwriting an old file by using this option.\n"
+   "           By not using this option, you will not overwrite an old file.\n"
+   "           See also the option --filename-prefix\n"
+-  "           If the filename has a valid file extension then this will be used to format the output file.\n" 
++  "           If the filename has a valid file extension then this will be used to format the output file.\n"
+   "           So that \"jack_capture ouput.ogg\" will produce an ogg file, unless a format argument is provided.\n"
+   "\n"
+   "\n"
+@@ -2260,7 +2260,7 @@ static const char *advanced_help =
+   "[--jack-name]/[-jn]               -> Set name of this jack_capture instance in the jack patchbay.\n"
+   "[--manual-connections]/[-mc]      -> jack_capture will not connect any ports for you. \n"
+   "[--bufsize s] or [-B s]           -> Initial/minimum buffer size in seconds. Default is 8 seconds\n"
+-  "                                     for mp3 files, and 4 seconds for all other formats.\n" 
++  "                                     for mp3 files, and 4 seconds for all other formats.\n"
+   "[--maxbufsize] or [-MB]           -> Maximum buffer size in seconds jack_capture will allocate.\n"
+   "                                     Default is 40. (Buffer is automatically increased during\n"
+   "                                     recording when needed. But it will never go beyond this size.)\n"
+@@ -2328,7 +2328,7 @@ static const char *advanced_help =
+   "  $jack_capture -c 2 -p system:capture*\n"
+   "\n";
+ 
+-static const char *osc_help = 
++static const char *osc_help =
+   "If called with -O <udp-port-number>, jack-capture can be remote-controlled.\n"
+ 	"The following OSC (Open Sound Control) messages are understood:\n"
+   "\n"
+@@ -2463,7 +2463,7 @@ void init_arguments(int argc, char *argv[]){
+       // handle mp3
+       if(strcmp(soundfile_format, "mp3") == 0) {
+ #if HAVE_LAME
+-        write_to_mp3 = true; 
++        write_to_mp3 = true;
+         // the min_buffer_time may have been set before we knew it was mp3 format
+         if(min_buffer_time<=0.0f || min_buffer_time == DEFAULT_MIN_BUFFER_TIME)
+           min_buffer_time = DEFAULT_MIN_MP3_BUFFER_TIME;
+@@ -2488,7 +2488,7 @@ void init_arguments(int argc, char *argv[]){
+       soundfile_format=soundfile_format_one_or_two;
+   }
+ 
+-  
++
+   verbose_print("main() find filename\n");
+   // Find filename
+   {
+@@ -2501,7 +2501,7 @@ void init_arguments(int argc, char *argv[]){
+       }
+     }
+   }
+-  
++
+ }
+ 
+ 
+@@ -2587,12 +2587,12 @@ char **read_config(int *argc,int max_size){
+           value = string_concat(getenv("HOME"),&value[1]);
+ 
+         argv[*argc] = value;
+-        *argc       = *argc + 1;    
++        *argc       = *argc + 1;
+         //printf("pos: %d -%s- -%s-\n",split_pos,name,value);
+       }
+     }else{
+       argv[*argc] = string_concat("--",line);
+-      *argc       = *argc + 1;   
++      *argc       = *argc + 1;
+     }
+   }
+ 
+@@ -2628,7 +2628,7 @@ void init_various(void){
+       jack_client_close(client);
+       exit(-2);
+     }
+-    
++
+     vringbuffer_set_receiver_callback(vringbuffer,disk_callback);
+   }
+ 
+@@ -2636,10 +2636,10 @@ void init_various(void){
+   // Init waiting.
+   {
+     SEM_INIT(stop_sem);
+-    
++
+     signal(SIGINT,finish);
+     signal(SIGTERM,finish);
+-    
++
+     if(no_stdin==false)
+       start_keypress_thread();
+   }
+@@ -2696,7 +2696,7 @@ void init_various(void){
+                     "Recording to \"%s\". The recording is going\n"
+                     MESSAGE_PREFIX "to last %lf seconds Press <Ctrl-C> to stop before that.\n",
+                     base_filename,
+-                    recording_time);  
++                    recording_time);
+     }else{
+       if(silent==false) {
+         if (timemachine_mode==true) {
+@@ -2704,7 +2704,7 @@ void init_various(void){
+           print_message("Press <Ctrl-C> to stop recording and quit.\n");
+         }else
+           print_message("Recording to \"%s\". Press <Return> or <Ctrl-C> to stop.\n",base_filename);
+-        //fprintf(stderr,"Recording to \"%s\". Press <Return> or <Ctrl-C> to stop.\n",base_filename);        
++        //fprintf(stderr,"Recording to \"%s\". Press <Return> or <Ctrl-C> to stop.\n",base_filename);
+       }
+     }
+   }
+@@ -2727,7 +2727,7 @@ void wait_until_recording_finished(void){
+     print_message("Waiting for JackTransportRolling.\n");
+   if(use_jack_freewheel==true)
+     print_message("Waiting for Jack Freewheeling .\n");
+-  
++
+ 
+   SEM_WAIT(stop_sem);
+ 
+@@ -2749,17 +2749,17 @@ void stop_recording_and_cleanup(void){
+   verbose_print("main() Stop recording and clean up.\n");
+ 
+   ATOMIC_SET(is_running, false);
+-  
++
+   if(use_manual_connections==false)
+     stop_connection_thread();
+ 
+   vringbuffer_stop_callbacks(vringbuffer); // Called before cleanup_disk to make sure all data are sent to the callback.
+-  
++
+   cleanup_disk();
+-  
++
+   if(use_meterbridge)
+     kill(meterbridge_pid,SIGINT);
+-  
++
+   stop_helper_thread();
+ 
+ #if HAVE_LIBLO
+@@ -2789,7 +2789,7 @@ void append_argv(char **v1,const char **v2,int len1,int len2,int max_size){
+   }
+ 
+   while(write_pos<len1+len2)
+-    v1[write_pos++] = (char*)v2[read_pos++];    
++    v1[write_pos++] = (char*)v2[read_pos++];
+ }
+ 
+ 
+@@ -2809,7 +2809,7 @@ int main (int argc, char *argv[]){
+   //get_free_mem();
+   //mainpid=getpid();
+   g_thread_type = MAIN_THREAD;
+-    
++
+   char **org_argv = argv;
+ 
+   // remove exe name from argument list.
+
+From 3eba39a0e8d30e9eac321c8660e51d8f6ee5a603 Mon Sep 17 00:00:00 2001
+From: dx9s <dx9s@dx9s.net>
+Date: Wed, 26 Feb 2020 10:23:54 -0800
+Subject: [PATCH 16/29] Feature patch Ogg VBR Quality setting
+
+Made it so it matches mp3 settings behavior, i.e. setting -oq (or
+--ogg-vbr-quality) will assume --format ogg
+---
+ jack_capture.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index c441050..7b69bb5 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -136,6 +136,8 @@ static bool write_to_mp3 = false;
+ static int das_lame_quality = 2; // 0 best, 9 worst.
+ static int das_lame_bitrate = -1;
+ static int das_lame_samplerate = 0;
++static bool write_to_ogg = false;
++static float ogg_vbr_quality = -1.0;
+ static bool use_jack_transport = false;
+ static bool use_jack_freewheel = false;
+ static bool use_manual_connections = false;
+@@ -1217,7 +1219,8 @@ static int open_soundfile(void){
+       bitdepth=24;
+       subformat=SF_FORMAT_PCM_24;
+ #if HAVE_OGG
+-    }else if(!strcasecmp("ogg",soundfile_format)){
++    }else if(!strcasecmp("ogg",soundfile_format) || write_to_ogg){
++      write_to_ogg = true;
+       subformat = SF_FORMAT_VORBIS;
+ #endif
+     }else{
+@@ -1249,6 +1252,13 @@ static int open_soundfile(void){
+     return 0;
+   }
+ 
++#if HAVE_OGG
++  if (write_to_ogg && ogg_vbr_quality>=-0.1 && ogg_vbr_quality<=1.0){ // assuming quality range from libvorbis
++	  double vbr_quality = (double) ogg_vbr_quality; // convert from float to double (libvorbis uses float BTW)
++	  sf_command(soundfile, SFC_SET_VBR_ENCODING_QUALITY, &vbr_quality, sizeof(double));
++  }
++#endif
++
+   hook_file_opened(filename);
+ 
+   return 1;
+@@ -2238,6 +2248,8 @@ static const char *advanced_help =
+   "[--mp3-bitrate n] or [-mp3b n]    -> Selects mp3 bitrate (in kbit/s).\n"
+   "                                     Default is set by liblame. (currently 128)\n"
+   "[--mp3-samplerate n] or [-mp3s n] -> Sets output sample rate for LAME\n"
++  "[--ogg-quality n] or [-oq n]      -> Set Vorbis quality (0.0 low - 1.0 high)\n"
++  "                                     default is set by libvorbis (~0.5)\n"
+   "[--write-to-stdout] or [-ws]      -> Writes 16 bit little endian to stdout. (the --format option, the\n"
+   "                                     --mp3 option, and some others have no effect using this option)\n"
+   "[--disable-meter] or [-dm]        -> Disable console meter.\n"
+@@ -2396,6 +2408,7 @@ void init_arguments(int argc, char *argv[]){
+       OPTARG("--mp3-quality","-mp3q") das_lame_quality = OPTARG_GETINT(); write_to_mp3 = true;
+       OPTARG("--mp3-bitrate","-mp3b") das_lame_bitrate = OPTARG_GETINT(); write_to_mp3 = true;
+ 	  OPTARG("--mp3-samplerate", "-mp3s") das_lame_samplerate = OPTARG_GETINT(); write_to_mp3 = true;
++      OPTARG("--ogg-quality","-oq") ogg_vbr_quality = OPTARG_GETFLOAT(); write_to_ogg = true; soundfile_format_is_set=true; soundfile_format="ogg";
+       OPTARG("--write-to-stdout","-ws") write_to_stdout=true;use_vu=false;show_bufferusage=false;
+       OPTARG("--disable-meter","-dm") use_vu=false;
+       OPTARG("--hide-buffer-usage","-hbu") show_bufferusage=false;
+
+From 5c1815e4836c36a0151dfa81e58a703d8c2694a2 Mon Sep 17 00:00:00 2001
+From: Elijah Lynn <elijah@elijahlynn.net>
+Date: Sat, 23 May 2020 12:41:53 -0700
+Subject: [PATCH 17/29] Fix "undefined reference to `__atomic_load_8'"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Was getting the below errors on a `make` on Raspbian based Patchbox OS.
+
+```
+patch@patchbox:~/jack_capture $ sudo make
+
+Checking dependencies:
+which bash
+/usr/bin/bash
+which tr
+/usr/bin/tr
+which sed
+/usr/bin/sed
+which install
+/usr/bin/install
+which pkg-config
+/usr/bin/pkg-config
+which gcc
+/usr/bin/gcc
+which g++
+/usr/bin/g++
+gcc -I/opt/local/include -E testsndfile.c >/dev/null
+All seems good
+
+bash gen_setformat_c.sh >setformat.c
+bash gen_das_config_h.sh >das_config.h
+
+jack_capture was configured with the following options:
+------------------------------
+#define HAVE_OGG 1
+#define HAVE_LAME 0
+#define HAVE_LIBLO 1
+//COMPILEFLAGS  -llo -lpthread
+#define NEW_JACK_LATENCY_API 1
+------------------------------
+
+cat das_config.h |grep COMPILEFLAGS|sed s/\\/\\/COMPILEFLAGS//|tr '\n' ' ' >config_flags
+gcc -I/opt/local/include -O3 -DVERSION=\"0.9.73\" -Wall -Wextra -Wno-unused jack_capture.c vringbuffer.c upwaker.c osc.c -o jack_capture  -ljack -lsndfile -lm -lpthread -lrt `cat config_flags`
+jack_capture.c: In function ‘init_arguments’:
+jack_capture.c:2468:31: warning: ‘.’ directive output of 1 bytes causes result to exceed ‘INT_MAX’ [-Wformat-overflow=]
+  sprintf(base_filename,"%s%0*d.%s",filename_prefix,leading_zeros+1,++try,soundfile_format);
+                               ^
+/usr/bin/ld: /tmp/ccqeJLVk.o: in function `print_console':
+jack_capture.c:(.text+0x1a0): undefined reference to `__atomic_load_8'
+/usr/bin/ld: /tmp/ccqeJLVk.o: in function `process':
+jack_capture.c:(.text+0x142c): undefined reference to `__atomic_load_8'
+/usr/bin/ld: jack_capture.c:(.text+0x1464): undefined reference to `__atomic_fetch_add_8'
+/usr/bin/ld: jack_capture.c:(.text+0x1470): undefined reference to `__atomic_load_8'
+/usr/bin/ld: jack_capture.c:(.text+0x1500): undefined reference to `__atomic_fetch_add_8'
+/usr/bin/ld: jack_capture.c:(.text+0x1584): undefined reference to `__atomic_load_8'
+collect2: error: ld returned 1 exit status
+make: *** [Makefile:63: jack_capture] Error 1
+(reverse-i-search)`libs': sudo apt install libsndfile1-dev
+```
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 08b8cfc..1f20d5c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -13,7 +13,7 @@ OPTIMIZE=-O3
+ #OPTIMIZE=-O0 -g
+ 
+ COMPILEFLAGS=$(CFLAGS) $(OPTIMIZE) -DVERSION=\"$(VERSION)\" -Wall -Wextra -Wno-unused
+-LINKFLAGS=$(LDFLAGS) -ljack -lsndfile -lm -lpthread
++LINKFLAGS=$(LDFLAGS) -ljack -lsndfile -lm -lpthread -atomic
+ 
+ OS := $(shell uname)
+ ifneq ($(OS),Darwin)
+
+From 81d5b4d06156be6c3c29cef6cae3f8917c730a18 Mon Sep 17 00:00:00 2001
+From: Elijah Lynn <elijah@elijahlynn.net>
+Date: Sat, 23 May 2020 12:43:14 -0700
+Subject: [PATCH 18/29] Fix typo.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 1f20d5c..6e1fef9 100644
+--- a/Makefile
++++ b/Makefile
+@@ -13,7 +13,7 @@ OPTIMIZE=-O3
+ #OPTIMIZE=-O0 -g
+ 
+ COMPILEFLAGS=$(CFLAGS) $(OPTIMIZE) -DVERSION=\"$(VERSION)\" -Wall -Wextra -Wno-unused
+-LINKFLAGS=$(LDFLAGS) -ljack -lsndfile -lm -lpthread -atomic
++LINKFLAGS=$(LDFLAGS) -ljack -lsndfile -lm -lpthread -latomic
+ 
+ OS := $(shell uname)
+ ifneq ($(OS),Darwin)
+
+From b30517740ca66ba49e87fdfbbb277269796d7624 Mon Sep 17 00:00:00 2001
+From: Orivej Desh <orivej@gmx.fr>
+Date: Mon, 7 Dec 2020 12:43:44 +0000
+Subject: [PATCH 19/29] Support opus output format
+
+---
+ README             |  2 +-
+ gen_setformat_c.sh | 10 ++++++++--
+ jack_capture.c     | 17 +++++++----------
+ 3 files changed, 16 insertions(+), 13 deletions(-)
+
+diff --git a/README b/README
+index 259082f..2255f3d 100644
+--- a/README
++++ b/README
+@@ -26,7 +26,7 @@ Other features:
+   writing to new files when reaching 4GB.
+ 
+ * Supports all soundfile formats supported by sndfile.
+-  (wav, aiff, ogg, flac, wavex, au, etc.)       (option: -f <format>)
++  (wav, aiff, ogg, opus, flac, wavex, au, etc.) (option: -f <format>)
+ 
+ * Supports mp3 by using liblame.                (option: -mp3)
+ 
+diff --git a/gen_setformat_c.sh b/gen_setformat_c.sh
+index 2202df2..ade85af 100644
+--- a/gen_setformat_c.sh
++++ b/gen_setformat_c.sh
+@@ -37,6 +37,7 @@ FLAC
+ CAF
+ WVE
+ OGG
++OPUS
+ MPC2K
+ RF64
+ MP3
+@@ -55,10 +56,15 @@ echo "  return("
+ 
+ for a in $ai;do
+     echo "#include <sndfile.h>" >temp.c
+-    echo "main(){return SF_FORMAT_"$a";}" >>temp.c
++    case "$a" in
++        OGG) format="SF_FORMAT_OGG | SF_FORMAT_VORBIS" ;;
++        OPUS) format="SF_FORMAT_OGG | SF_FORMAT_OPUS" ;;
++        *) format="SF_FORMAT_$a" ;;
++    esac
++    echo "main(){return $format;}" >>temp.c
+     echo >>temp.c
+     if gcc temp.c 2>/dev/null; then
+-	echo "    (!strcasecmp(\""$a"\",soundfile_format)) ? SF_FORMAT_"$a":"
++	echo "    (!strcasecmp(\""$a"\",soundfile_format)) ? $format :"
+     fi
+ done
+ echo "    -1);"
+diff --git a/jack_capture.c b/jack_capture.c
+index 7b69bb5..f61ded5 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -136,7 +136,7 @@ static bool write_to_mp3 = false;
+ static int das_lame_quality = 2; // 0 best, 9 worst.
+ static int das_lame_bitrate = -1;
+ static int das_lame_samplerate = 0;
+-static bool write_to_ogg = false;
++static bool write_to_ogg_vorbis = false;
+ static float ogg_vbr_quality = -1.0;
+ static bool use_jack_transport = false;
+ static bool use_jack_freewheel = false;
+@@ -1159,7 +1159,7 @@ static int open_mp3file(void){
+ 
+ 
+ static int open_soundfile(void){
+-  int subformat;
++  int subformat = 0;
+ 
+   SF_INFO sf_info; memset(&sf_info,0,sizeof(sf_info));
+ 
+@@ -1218,12 +1218,7 @@ static int open_soundfile(void){
+     if(!strcasecmp("flac",soundfile_format) || !strcasecmp("sds",soundfile_format)){
+       bitdepth=24;
+       subformat=SF_FORMAT_PCM_24;
+-#if HAVE_OGG
+-    }else if(!strcasecmp("ogg",soundfile_format) || write_to_ogg){
+-      write_to_ogg = true;
+-      subformat = SF_FORMAT_VORBIS;
+-#endif
+-    }else{
++    }else if((sf_info.format & SF_FORMAT_SUBMASK) == 0) {
+       bitdepth=32; // sizeof(float)*8 would be incorrect in case sizeof(float)!=4
+       subformat = SF_FORMAT_FLOAT;
+     }
+@@ -1253,7 +1248,9 @@ static int open_soundfile(void){
+   }
+ 
+ #if HAVE_OGG
+-  if (write_to_ogg && ogg_vbr_quality>=-0.1 && ogg_vbr_quality<=1.0){ // assuming quality range from libvorbis
++  if((sf_info.format & SF_FORMAT_SUBMASK) == SF_FORMAT_VORBIS)
++      write_to_ogg_vorbis = true;
++  if (write_to_ogg_vorbis && ogg_vbr_quality>=-0.1 && ogg_vbr_quality<=1.0){ // assuming quality range from libvorbis
+ 	  double vbr_quality = (double) ogg_vbr_quality; // convert from float to double (libvorbis uses float BTW)
+ 	  sf_command(soundfile, SFC_SET_VBR_ENCODING_QUALITY, &vbr_quality, sizeof(double));
+   }
+@@ -2408,7 +2405,7 @@ void init_arguments(int argc, char *argv[]){
+       OPTARG("--mp3-quality","-mp3q") das_lame_quality = OPTARG_GETINT(); write_to_mp3 = true;
+       OPTARG("--mp3-bitrate","-mp3b") das_lame_bitrate = OPTARG_GETINT(); write_to_mp3 = true;
+ 	  OPTARG("--mp3-samplerate", "-mp3s") das_lame_samplerate = OPTARG_GETINT(); write_to_mp3 = true;
+-      OPTARG("--ogg-quality","-oq") ogg_vbr_quality = OPTARG_GETFLOAT(); write_to_ogg = true; soundfile_format_is_set=true; soundfile_format="ogg";
++      OPTARG("--ogg-quality","-oq") ogg_vbr_quality = OPTARG_GETFLOAT(); write_to_ogg_vorbis = true; soundfile_format_is_set=true; soundfile_format="ogg";
+       OPTARG("--write-to-stdout","-ws") write_to_stdout=true;use_vu=false;show_bufferusage=false;
+       OPTARG("--disable-meter","-dm") use_vu=false;
+       OPTARG("--hide-buffer-usage","-hbu") show_bufferusage=false;
+
+From f3770ca4b5ab63b029994e49983358b2bef877d0 Mon Sep 17 00:00:00 2001
+From: Orivej Desh <orivej@gmx.fr>
+Date: Mon, 7 Dec 2020 13:35:41 +0000
+Subject: [PATCH 20/29] Remove write_to_ogg_vorbis
+
+---
+ jack_capture.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index f61ded5..43ae6b0 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -136,7 +136,6 @@ static bool write_to_mp3 = false;
+ static int das_lame_quality = 2; // 0 best, 9 worst.
+ static int das_lame_bitrate = -1;
+ static int das_lame_samplerate = 0;
+-static bool write_to_ogg_vorbis = false;
+ static float ogg_vbr_quality = -1.0;
+ static bool use_jack_transport = false;
+ static bool use_jack_freewheel = false;
+@@ -1159,7 +1158,7 @@ static int open_mp3file(void){
+ 
+ 
+ static int open_soundfile(void){
+-  int subformat = 0;
++  int subformat;
+ 
+   SF_INFO sf_info; memset(&sf_info,0,sizeof(sf_info));
+ 
+@@ -1203,7 +1202,7 @@ static int open_soundfile(void){
+       sf_info.format=format;
+   }
+ 
+-  is_using_wav = (sf_info.format==SF_FORMAT_WAV)?true:false;
++  is_using_wav = ((sf_info.format & SF_FORMAT_TYPEMASK) == SF_FORMAT_WAV)?true:false;
+ 
+   switch (bitdepth) {
+   case 8: subformat = SF_FORMAT_PCM_U8;
+@@ -1218,7 +1217,10 @@ static int open_soundfile(void){
+     if(!strcasecmp("flac",soundfile_format) || !strcasecmp("sds",soundfile_format)){
+       bitdepth=24;
+       subformat=SF_FORMAT_PCM_24;
+-    }else if((sf_info.format & SF_FORMAT_SUBMASK) == 0) {
++    }else if((sf_info.format & SF_FORMAT_SUBMASK)) {
++      // getformat has set subformat (SF_FORMAT_VORBIS or SF_FORMAT_OPUS).
++      subformat = sf_info.format & SF_FORMAT_SUBMASK;
++    }else{
+       bitdepth=32; // sizeof(float)*8 would be incorrect in case sizeof(float)!=4
+       subformat = SF_FORMAT_FLOAT;
+     }
+@@ -1248,9 +1250,7 @@ static int open_soundfile(void){
+   }
+ 
+ #if HAVE_OGG
+-  if((sf_info.format & SF_FORMAT_SUBMASK) == SF_FORMAT_VORBIS)
+-      write_to_ogg_vorbis = true;
+-  if (write_to_ogg_vorbis && ogg_vbr_quality>=-0.1 && ogg_vbr_quality<=1.0){ // assuming quality range from libvorbis
++  if (subformat == SF_FORMAT_VORBIS && ogg_vbr_quality>=-0.1 && ogg_vbr_quality<=1.0){ // assuming quality range from libvorbis
+ 	  double vbr_quality = (double) ogg_vbr_quality; // convert from float to double (libvorbis uses float BTW)
+ 	  sf_command(soundfile, SFC_SET_VBR_ENCODING_QUALITY, &vbr_quality, sizeof(double));
+   }
+@@ -2405,7 +2405,7 @@ void init_arguments(int argc, char *argv[]){
+       OPTARG("--mp3-quality","-mp3q") das_lame_quality = OPTARG_GETINT(); write_to_mp3 = true;
+       OPTARG("--mp3-bitrate","-mp3b") das_lame_bitrate = OPTARG_GETINT(); write_to_mp3 = true;
+ 	  OPTARG("--mp3-samplerate", "-mp3s") das_lame_samplerate = OPTARG_GETINT(); write_to_mp3 = true;
+-      OPTARG("--ogg-quality","-oq") ogg_vbr_quality = OPTARG_GETFLOAT(); write_to_ogg_vorbis = true; soundfile_format_is_set=true; soundfile_format="ogg";
++      OPTARG("--ogg-quality","-oq") ogg_vbr_quality = OPTARG_GETFLOAT(); soundfile_format_is_set=true; soundfile_format="ogg";
+       OPTARG("--write-to-stdout","-ws") write_to_stdout=true;use_vu=false;show_bufferusage=false;
+       OPTARG("--disable-meter","-dm") use_vu=false;
+       OPTARG("--hide-buffer-usage","-hbu") show_bufferusage=false;
+
+From d7d8e78acfe06892f0ccdaa13d230311d183f01a Mon Sep 17 00:00:00 2001
+From: outer-spheres-of-mind <noreply@noreply.com>
+Date: Sat, 10 Apr 2021 00:51:12 +0300
+Subject: [PATCH 21/29] Fix handling of command line arguments
+
+Command line arguments for jack_capture were handled incorrectly,
+preventing jack_capture to record when given jack port names that
+include space characters.
+---
+ jack_capture_gui | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/jack_capture_gui b/jack_capture_gui
+index 21dd3b7..4586c31 100755
+--- a/jack_capture_gui
++++ b/jack_capture_gui
+@@ -16,8 +16,6 @@
+ #    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ 
+ 
+-OPTIONS=$@
+-
+ if [ ! `which zenity` ] ; then
+     echo "zenity needed";
+     exit;
+@@ -27,7 +25,7 @@ while true
+ do
+   zenity  --question --ok-label="Yes" --cancel-label="No" --text="PRESS YES TO START REC"
+   case "$?" in
+-    0) `dirname $0`/jack_capture --no-stdin $OPTIONS &
++    0) `dirname $0`/jack_capture --no-stdin "$@" &
+        some_pid=$!
+        zenity --info --text=" RECORDING IN PROGRESS\n PRESS OK TO STOP REC "
+        kill -s SIGINT $some_pid
+
+From f6f52054412d18b8dbd51132d1f81de347288003 Mon Sep 17 00:00:00 2001
+From: Kevin Thomas <me@kevinthomas.dev>
+Date: Thu, 29 Apr 2021 21:05:19 -0700
+Subject: [PATCH 22/29] Fix asprintf declaration
+
+---
+ jack_capture.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 43ae6b0..44d2484 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -919,7 +919,7 @@ static void stop_helper_thread(void){
+ #define vsnprintf _vsnprintf
+ #endif
+ #ifndef __APPLE__
+-int asprintf(char **buffer, char *fmt, ...) {
++int asprintf(char **buffer, const char *fmt, ...) {
+     /* Guess we need no more than 200 chars of space. */
+     int size = 200;
+     int nchars;
+
+From 7a97ca737819730ee65217ef8cbff3b031c460f3 Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Fri, 30 Apr 2021 08:23:30 +0200
+Subject: [PATCH 23/29] Check for both __USE_GNU and _USE_GNU (not sure which
+ one is correct). Additional fix for #45
+
+---
+ jack_capture.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 44d2484..d575e53 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -910,7 +910,7 @@ static void stop_helper_thread(void){
+ /////////////////////////////////////////////////////////////////////
+ 
+ 
+-#ifndef __USE_GNU
++#if !defined(__USE_GNU) && !defined(_USE_GNU)
+ /* This code has been derived from an example in the glibc2 documentation.
+  * "asprintf() implementation for braindamaged operating systems"
+  * Copyright (C) 1991, 1994-1999, 2000, 2001 Free Software Foundation, Inc.
+
+From 75a8f4d20205b0b534e06c2bfdeeeba63fed14ce Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Fri, 30 Apr 2021 08:27:23 +0200
+Subject: [PATCH 24/29] minor fix
+
+---
+ jack_capture.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index d575e53..4f6ba66 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -2503,10 +2503,9 @@ void init_arguments(int argc, char *argv[]){
+   // Find filename
+   {
+     if(base_filename==NULL){
+-      int try=0;
+       base_filename=my_calloc(1,5000);
+-      for(;;){
+-	sprintf(base_filename,"%s%0*d.%s",filename_prefix,leading_zeros+1,++try,soundfile_format);
++      for(int try=1;try<100000;try++){
++	sprintf(base_filename,"%s%0*d.%s",filename_prefix,leading_zeros+1,try,soundfile_format);
+ 	if(access(base_filename,F_OK)) break;
+       }
+     }
+
+From d2bcb18c28094a2eeb3ddb78d14abac8c91252af Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Fri, 30 Apr 2021 08:28:25 +0200
+Subject: [PATCH 25/29] Reset error and overrun counters after giving errors,
+ not before. Fix for #41
+
+---
+ jack_capture.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 4f6ba66..bc4776b 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -1319,11 +1319,6 @@ static int rotate_file(size_t frames, int reset_totals){
+   disksize=0;
+ 
+   if (reset_totals) {
+-    /* reset totals on file-rotate */
+-    disk_errors = 0;
+-    total_overruns = 0;
+-    total_xruns = 0;
+-
+     if (overruns > 0) {
+       print_message("jack_capture failed with a total of %d overruns.\n", total_overruns);
+       print_message("   try a bigger buffer than -B %f\n",min_buffer_time);
+@@ -1332,6 +1327,11 @@ static int rotate_file(size_t frames, int reset_totals){
+       print_message("jack_capture failed with a total of %d disk errors.\n",disk_errors);
+     if (total_xruns > 0)
+       print_message("jack_capture encountered %d jack x-runs.\n", total_xruns);
++
++    /* reset totals on file-rotate */
++    disk_errors = 0;
++    total_overruns = 0;
++    total_xruns = 0;
+   }
+ 
+   if(!open_soundfile()) return 0;
+
+From 00c986d41dc932982d248b7c27221fccaec90f0b Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Fri, 30 Apr 2021 08:35:03 +0200
+Subject: [PATCH 26/29] Compile with _GNU_SOURCE to avoid custom version of
+ asprintf
+
+---
+ jack_capture.c | 49 ++-----------------------------------------------
+ 1 file changed, 2 insertions(+), 47 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index bc4776b..3c1613b 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -20,6 +20,8 @@
+ 
+ #include "das_config.h"
+ 
++#define _GNU_SOURCE 1
++
+ #include <signal.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -910,53 +912,6 @@ static void stop_helper_thread(void){
+ /////////////////////////////////////////////////////////////////////
+ 
+ 
+-#if !defined(__USE_GNU) && !defined(_USE_GNU)
+-/* This code has been derived from an example in the glibc2 documentation.
+- * "asprintf() implementation for braindamaged operating systems"
+- * Copyright (C) 1991, 1994-1999, 2000, 2001 Free Software Foundation, Inc.
+- */
+-#ifdef _WIN32
+-#define vsnprintf _vsnprintf
+-#endif
+-#ifndef __APPLE__
+-int asprintf(char **buffer, const char *fmt, ...) {
+-    /* Guess we need no more than 200 chars of space. */
+-    int size = 200;
+-    int nchars;
+-    va_list ap;
+-
+-    *buffer = (char*)malloc(size);
+-    if (*buffer == NULL) return -1;
+-
+-    /* Try to print in the allocated space. */
+-    va_start(ap, fmt);
+-    nchars = vsnprintf(*buffer, size, fmt, ap);
+-    va_end(ap);
+-
+-    if (nchars >= size)
+-    {
+-        char *tmpbuff;
+-        /* Reallocate buffer now that we know how much space is needed. */
+-        size = nchars+1;
+-        tmpbuff = (char*)realloc(*buffer, size);
+-
+-        if (tmpbuff == NULL) { /* we need to free it*/
+-            free(*buffer);
+-            return -1;
+-        }
+-
+-        *buffer=tmpbuff;
+-        /* Try again. */
+-        va_start(ap, fmt);
+-        nchars = vsnprintf(*buffer, size, fmt, ap);
+-        va_end(ap);
+-    }
+-
+-    if (nchars < 0) return nchars;
+-    return size;
+-}
+-#endif
+-#endif
+ 
+ #define ARGS_ADD_ARGV(FMT,ARG) \
+   argv=(char**) realloc((void*)argv, (argc+2)*sizeof(char*)); \
+
+From fa6f2907e4119a9c59e8d4abed0e32c4422a5523 Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Fri, 30 Apr 2021 08:37:15 +0200
+Subject: [PATCH 27/29] fix
+
+---
+ jack_capture.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index 3c1613b..cffac9a 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -20,7 +20,7 @@
+ 
+ #include "das_config.h"
+ 
+-#define _GNU_SOURCE 1
++#define _GNU_SOURCE 1 // For asprintf
+ 
+ #include <signal.h>
+ #include <stdio.h>
+
+From 10cec477792d9306657747c5078e82d95108729b Mon Sep 17 00:00:00 2001
+From: Kjetil Matheussen <k.s.matheussen@notam02.no>
+Date: Sun, 5 Sep 2021 10:49:04 +0200
+Subject: [PATCH 28/29] Fix #47
+
+---
+ jack_capture.c |  9 ++++++---
+ vringbuffer.c  | 35 +++++++++++++++++------------------
+ 2 files changed, 23 insertions(+), 21 deletions(-)
+
+diff --git a/jack_capture.c b/jack_capture.c
+index cffac9a..21d6402 100644
+--- a/jack_capture.c
++++ b/jack_capture.c
+@@ -912,10 +912,13 @@ static void stop_helper_thread(void){
+ /////////////////////////////////////////////////////////////////////
+ 
+ 
+-
+ #define ARGS_ADD_ARGV(FMT,ARG) \
+-  argv=(char**) realloc((void*)argv, (argc+2)*sizeof(char*)); \
+-  asprintf(&argv[argc++], FMT, ARG); argv[argc] = 0;
++  argv = (char**) realloc((void*)argv, (argc+2)*sizeof(char*)); \
++  {                                                             \
++  int ret = asprintf(&argv[argc++], FMT, ARG);                  \
++  (void)ret;                                                    \
++  }                                                             \
++  argv[argc] = 0;
+ 
+ #define PREPARE_ARGV(CMD,ARGC,ARGV) \
+ {\
+diff --git a/vringbuffer.c b/vringbuffer.c
+index c2a7a09..05c811a 100644
+--- a/vringbuffer.c
++++ b/vringbuffer.c
+@@ -118,7 +118,7 @@ static void* my_malloc(size_t size1,size_t size2){
+ }
+ 
+ 
+-static bool vringbuffer_increase_writer1(vringbuffer_t *vrb,int num_elements,bool first_call){
++static bool vringbuffer_increase_writer1(vringbuffer_t *vrb, int num_elements, bool first_call){
+ 
+   if(num_elements+vrb->curr_num_elements > vrb->max_num_elements)
+     num_elements = vrb->max_num_elements - vrb->curr_num_elements;
+@@ -126,19 +126,18 @@ static bool vringbuffer_increase_writer1(vringbuffer_t *vrb,int num_elements,boo
+   if(num_elements==0)
+     return true;
+ 
++  vringbuffer_list_t *element = my_malloc(1, sizeof(vringbuffer_list_t) + (num_elements*vrb->element_size));
++  if (element==NULL)
++    return false;
++
+   pthread_mutex_lock(&vrb->increase_lock);{
+-    int i;
+ 
+-    vringbuffer_list_t *element=my_malloc(1,sizeof(vringbuffer_list_t) + (num_elements*vrb->element_size));
+-    element->next=vrb->allocated_mem;
+-    vrb->allocated_mem=element;
++    element->next = vrb->allocated_mem;
++    vrb->allocated_mem = element;
+ 
+-    char *das_buffer=(char*)(element+1);
++    char *das_buffer = (char*)(element+1);
+     
+-    if(das_buffer==NULL)
+-      return false;
+-
+-    if(first_call){
++    if (first_call){
+       // Make sure at least a certain amount of the buffer is in a cache.
+       // Might create a less shocking startup.
+       int num=8;
+@@ -147,14 +146,14 @@ static bool vringbuffer_increase_writer1(vringbuffer_t *vrb,int num_elements,boo
+       memset(das_buffer,0,num*vrb->element_size);
+     }
+     
+-      for(i=0;i<num_elements;i++){
+-        char *pointer =  das_buffer + (i*vrb->element_size);
+-        jack_ringbuffer_write(vrb->for_writer1,
+-                              (char*)&pointer,
+-                              sizeof(char*));
+-      }
+-
+-      vrb->curr_num_elements += num_elements;
++    for(int i=0 ; i<num_elements ; i++){
++      char *pointer =  das_buffer + (i*vrb->element_size);
++      jack_ringbuffer_write(vrb->for_writer1,
++                            (char*)&pointer,
++                            sizeof(char*));
++    }
++
++    vrb->curr_num_elements += num_elements;
+ 
+   }pthread_mutex_unlock(&vrb->increase_lock);
+   
+
+From 55b41131928b257bf5cb137b1a6f29b811a5ff58 Mon Sep 17 00:00:00 2001
+From: Florian Weimer <fweimer@redhat.com>
+Date: Wed, 4 Jan 2023 14:49:53 +0100
+Subject: [PATCH 29/29] Improve C99 compatibility of code-generating shell
+ scripts
+
+Explicitly declare the int return type of the main function.  This
+improves compatibility with future C99-only compilers, which might
+no longer support implicit ints.
+---
+ gen_das_config_h.sh | 8 ++++----
+ gen_setformat_c.sh  | 2 +-
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/gen_das_config_h.sh b/gen_das_config_h.sh
+index a8c3c33..8739cf9 100644
+--- a/gen_das_config_h.sh
++++ b/gen_das_config_h.sh
+@@ -14,7 +14,7 @@
+ 
+ 
+ echo "#include <sndfile.h>" >temp$$.c
+-echo "main(){return SF_FORMAT_OGG;}" >>temp$$.c
++echo "int main(void){return SF_FORMAT_OGG;}" >>temp$$.c
+ echo >>temp$$.c
+ if gcc temp$$.c 2>/dev/null; then
+     echo "#define HAVE_OGG 1"
+@@ -24,7 +24,7 @@ fi
+ 
+ 
+ echo "#include <lame/lame.h>" >temp$$.c
+-echo "main(){return 0;}" >>temp$$.c
++echo "int main(void){return 0;}" >>temp$$.c
+ echo >>temp$$.c
+ if gcc temp$$.c -lmp3lame 2>/dev/null; then
+     echo "#define HAVE_LAME 1"
+@@ -35,7 +35,7 @@ fi
+ 
+ 
+ echo "#include <lo/lo.h>" >temp$$.c
+-echo "main(){return 0;}" >>temp$$.c
++echo "int main(void){return 0;}" >>temp$$.c
+ echo >>temp$$.c
+ if pkg-config --cflags --libs liblo >/dev/null 2>/dev/null && gcc temp$$.c `pkg-config --cflags --libs liblo` 2>/dev/null ; then
+     echo "#define HAVE_LIBLO 1"
+@@ -46,7 +46,7 @@ fi
+ 
+ 
+ echo "#include <jack/jack.h>" >temp$$.c
+-echo "main(){return (int)jack_port_get_latency_range;}" >>temp$$.c
++echo "int main(void){return (int)jack_port_get_latency_range;}" >>temp$$.c
+ echo >>temp$$.c
+ if gcc temp$$.c -ljack 2>/dev/null ; then
+     echo "#define NEW_JACK_LATENCY_API 1"
+diff --git a/gen_setformat_c.sh b/gen_setformat_c.sh
+index ade85af..083b373 100644
+--- a/gen_setformat_c.sh
++++ b/gen_setformat_c.sh
+@@ -61,7 +61,7 @@ for a in $ai;do
+         OPUS) format="SF_FORMAT_OGG | SF_FORMAT_OPUS" ;;
+         *) format="SF_FORMAT_$a" ;;
+     esac
+-    echo "main(){return $format;}" >>temp.c
++    echo "int main(void){return $format;}" >>temp.c
+     echo >>temp.c
+     if gcc temp.c 2>/dev/null; then
+ 	echo "    (!strcasecmp(\""$a"\",soundfile_format)) ? $format :"

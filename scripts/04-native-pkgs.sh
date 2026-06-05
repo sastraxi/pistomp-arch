@@ -78,4 +78,7 @@ build_pkg "lg"
 
 build_pkg "lcd-splash"
 
+# allows capturing audio while JACK is running
+build_pkg "jack_capture"
+
 echo "==> 04-native-pkgs: Done"
