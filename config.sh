@@ -26,8 +26,8 @@ PISTOMP_BRANCH="release/patch"
 MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
 MODUI_BRANCH="fix/subprocess-venv"
 
-PEDALBOARDS_REPO="https://github.com/sastraxi/dot-pedalboards.git"
-PEDALBOARDS_BRANCH="main"
+PEDALBOARDS_REPO="https://github.com/TreeFallSound/pi-stomp-pedalboards.git"
+PEDALBOARDS_BRANCH="master"
 
 USERFILES_REPO="https://github.com/TreeFallSound/pi-stomp-user-files.git"
 USERFILES_BRANCH="main"
