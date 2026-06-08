@@ -20,13 +20,13 @@ case "$1" in
     on)
         echo "==> Enabling expression pedal in $CONFIG_FILE..."
         # Uncomment only the block starting with #analog_controllers: (no space after #)
-        sed -i '/^  #analog_controllers:/,/midi_CC: 75/s/^  #/  /' "$CONFIG_FILE"
+        sed -i '/^  #analog_controllers:/,/autosync: true/s/^  #/  /' "$CONFIG_FILE"
         echo "==> Done. Restart pi-stomp service or reboot to apply."
         ;;
     off)
         echo "==> Disabling expression pedal in $CONFIG_FILE..."
         # Comment the block starting with analog_controllers:
-        sed -i '/^  analog_controllers:/,/midi_CC: 75/s/^  /  #/' "$CONFIG_FILE"
+        sed -i '/^  analog_controllers:/,/autosync: true/s/^  /  #/' "$CONFIG_FILE"
         echo "==> Done. Restart pi-stomp service or reboot to apply."
         ;;
     *)
