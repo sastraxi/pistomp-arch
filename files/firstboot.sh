@@ -78,13 +78,6 @@ if [[ -f /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state ]]; then
     cp /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state /var/lib/alsa/asound.state
 fi
 
-# JACK audio configuration
-cat > /etc/default/jack <<EOF
-# JACK audio settings (configured from /boot/pistomp.conf)
-JACK_SAMPLE_RATE="${JACK_SAMPLE_RATE:-48000}"
-JACK_PERIOD="${JACK_PERIOD:-256}"
-EOF
-
 # Fix ownership
 chown -R pistomp:pistomp /home/pistomp/
 
@@ -94,6 +87,13 @@ if grep -q 'Pi 3' /proc/cpuinfo 2>/dev/null; then
 else
     runuser -u pistomp -- /home/pistomp/pi-stomp/util/modify_version.sh 3.0
 fi
+
+# JACK audio configuration
+cat > /etc/default/jack <<EOF
+# JACK audio settings (configured from /boot/pistomp.conf)
+JACK_SAMPLE_RATE="${JACK_SAMPLE_RATE:-48000}"
+JACK_PERIOD="${JACK_PERIOD:-256}"
+EOF
 
 # Pi 5 EEPROM update
 if grep -q 'Pi 5' /proc/cpuinfo 2>/dev/null; then
