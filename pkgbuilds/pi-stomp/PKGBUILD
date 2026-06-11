@@ -17,8 +17,8 @@ depends=('python' 'python-lilv' 'lilv' 'lg' 'jack2-pistomp')
 # wheel yet); base-devel provides the C toolchain for the from-source ext builds.
 makedepends=('uv' 'git' 'swig' 'base-devel')
 
-_repo="https://github.com/sastraxi/pi-stomp.git"
-_branch="release/patch"
+_repo="${PISTOMP_REPO:-https://github.com/sastraxi/pi-stomp.git}"
+_branch="${PISTOMP_BRANCH:-release/patch}"
 
 # deploy-pkg.sh --source sets PISTOMP_DEPLOY=1 and rsyncs a local tree next to
 # this PKGBUILD as ./pi-stomp (== $pkgname). In that mode build from the tree
@@ -40,7 +40,14 @@ pkgver() {
     # the clean tag (v3.1.0 -> 3.1.0); off-tag -> v3.0.4-81-gb2405a6 ->
     # 3.0.4.r81.gb2405a6. (No --long, so the .rN.ghash suffix is omitted at r0.)
     cd pi-stomp
-    git describe --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    local desc
+    if desc=$(git describe --tags --abbrev=7 2>/dev/null); then
+        echo "$desc" | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    else
+        # The repo carries no tags, so git describe finds nothing. Synthesize the
+        # off-tag format from the base ${pkgver} plus commit count + short hash.
+        echo "${pkgver}.r$(git rev-list --count HEAD).g$(git rev-parse --short=7 HEAD)"
+    fi
 }
 
 build() {

@@ -32,6 +32,21 @@ build_pkg() {
     chown -R builduser:builduser "${build_dir}"
     pushd "${build_dir}" > /dev/null
 
+    # Export repo/branch configuration so PKGBUILDs can read it as the
+    # single source of truth (config.sh). Each PKGBUILD uses defaults so
+    # these are optional, but providing them keeps image builds and
+    # deploy-pkg.sh in sync with config.sh.
+    cat > "${build_dir}/.env" <<EOF
+export PISTOMP_REPO='${PISTOMP_REPO:-}'
+export PISTOMP_BRANCH='${PISTOMP_BRANCH:-}'
+export MODUI_REPO='${MODUI_REPO:-}'
+export MODUI_BRANCH='${MODUI_BRANCH:-}'
+export MOD_HOST_REPO='${MOD_HOST_REPO:-}'
+export MOD_HOST_BRANCH='${MOD_HOST_BRANCH:-}'
+export RECOVERY_REPO='${RECOVERY_REPO:-}'
+export RECOVERY_BRANCH='${RECOVERY_BRANCH:-}'
+EOF
+
     local _pkgname _pkgver _pkgrel _has_pkgver
     _pkgname=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgname")
     _pkgrel=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgrel")
@@ -42,7 +57,7 @@ build_pkg() {
     _has_pkgver=$(bash -c "source ${build_dir}/PKGBUILD && type -t pkgver" || true)
     if [[ "${_has_pkgver}" == "function" ]]; then
         echo "==> Resolving dynamic pkgver: ${pkg}..."
-        su builduser -c "makepkg -od --noconfirm"
+        su builduser -c "source ${build_dir}/.env && makepkg -od --noconfirm"
     fi
     _pkgver=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgver")
 
@@ -61,9 +76,9 @@ build_pkg() {
     # -e (noextract) reuses the checkout already fetched above for VCS packages;
     # harmless for the rest since nothing was extracted yet.
     if [[ "${_has_pkgver}" == "function" ]]; then
-        su builduser -c "makepkg -es --noconfirm"
+        su builduser -c "source ${build_dir}/.env && makepkg -es --noconfirm"
     else
-        su builduser -c "makepkg -s --noconfirm"
+        su builduser -c "source ${build_dir}/.env && makepkg -s --noconfirm"
     fi
     pacman -U --noconfirm "${build_dir}"/*.pkg.tar.*
     # Cache the built package for next time

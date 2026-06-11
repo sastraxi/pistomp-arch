@@ -14,8 +14,8 @@ depends=('pistomp-python311' 'lilv' 'jack2-pistomp' 'alsa-lib')
 # `make -C utils`; base-devel is the C/C++ toolchain + pkgconf.
 makedepends=('uv' 'git' 'base-devel' 'pistomp-python311' 'lilv' 'jack2-pistomp' 'alsa-lib')
 
-_repo="https://github.com/sastraxi/mod-ui.git"
-_branch="feat/web-bpm-rebroadcast"
+_repo="${MODUI_REPO:-https://github.com/sastraxi/mod-ui.git}"
+_branch="${MODUI_BRANCH:-feat/web-bpm-rebroadcast}"
 _py="/opt/pistomp/python311/bin/python3.11"
 
 # deploy-pkg.sh --source sets PISTOMP_DEPLOY=1 and rsyncs a local tree next to
@@ -38,7 +38,14 @@ pkgver() {
     # the clean tag (v1.0.0 -> 1.0.0); off-tag -> v0.99.8-3531-g7c40353 ->
     # 0.99.8.r3531.g7c40353. (No --long, so the .rN.ghash suffix is omitted at r0.)
     cd mod-ui
-    git describe --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    local desc
+    if desc=$(git describe --tags --abbrev=7 2>/dev/null); then
+        echo "$desc" | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    else
+        # The fork carries no tags, so git describe finds nothing. Synthesize the
+        # off-tag format from the base ${pkgver} plus commit count + short hash.
+        echo "${pkgver}.r$(git rev-list --count HEAD).g$(git rev-parse --short=7 HEAD)"
+    fi
 }
 
 build() {

@@ -6,28 +6,44 @@ pkgdesc="Package update and recovery service for pi-Stomp"
 arch=('aarch64')
 url="https://github.com/sastraxi/pistomp-recovery"
 license=('MIT')
-# pygame is a runtime dependency (the recovery UI renders into a pygame Surface
-# that is pushed to the SPI LCD). It is compiled from source against the system
-# SDL2 + freetype2 (no cp314 wheel exists), so those libs are also runtime deps.
-depends=('python' 'jack2-pistomp' 'lg' 'sdl2' 'freetype2')
-# base-devel: C toolchain + pkgconf for the pygame/lgpio source builds.
+depends=('python' 'jack2-pistomp' 'sdl2' 'freetype2')
+# base-devel: C toolchain + pkgconf for the pygame source build.
 # sdl2/freetype2: headers + *.pc files needed while compiling pygame.
-# swig: required to build the lgpio extension from its PyPI sdist.
-makedepends=('uv' 'git' 'swig' 'base-devel' 'sdl2' 'freetype2')
+# swig: builds the lgpio extension from its PyPI sdist (no cp314 wheel yet).
+makedepends=('uv' 'git' 'base-devel' 'sdl2' 'freetype2' 'swig')
+
+_repo="${RECOVERY_REPO:-https://github.com/sastraxi/pistomp-recovery.git}"
+_branch="${RECOVERY_BRANCH:-main}"
+
 # deploy-pkg.sh --source sets PISTOMP_DEPLOY=1 and rsyncs a local tree next to
 # this PKGBUILD as ./pistomp-recovery (== $pkgname). In that mode build from the
-# tree instead of fetching git. Normal image builds fetch from git.
+# tree instead of fetching git, and skip the git-describe pkgver (the tree has no
+# .git). Normal image builds leave PISTOMP_DEPLOY unset and fetch from git.
 if [[ -n "${PISTOMP_DEPLOY:-}" ]]; then
     source=("$pkgname")
-    # PISTOMP_DEPLOY carries a throwaway 0.dev<timestamp> version (from
-    # deploy-pkg.sh) that sorts under any real release, so a later pacman -Syu
-    # replaces it. Set directly here (no pkgver() function) to keep the
-    # image-build cache fast path.
-    pkgver="${PISTOMP_DEPLOY}"
 else
-    source=("pistomp-recovery::git+${url}.git#branch=main")
+    source=("pistomp-recovery::git+${_repo}#branch=${_branch}")
 fi
 sha256sums=('SKIP')
+
+pkgver() {
+    # Deploy mode (deploy-pkg.sh --source): the local tree has no .git, and
+    # PISTOMP_DEPLOY carries a throwaway 0.dev<timestamp> version that sorts
+    # under any real release so a later pacman -Syu replaces it.
+    [[ -n "${PISTOMP_DEPLOY:-}" ]] && { echo "${PISTOMP_DEPLOY}"; return; }
+    # Derive from the nearest reachable tag on ${_branch}. Exactly on a tag ->
+    # the clean tag (v0.2.0 -> 0.2.0); off-tag -> v0.1.0-42-gabc1234 ->
+    # 0.1.0.r42.gabc1234. (No --long, so the .rN.ghash suffix is omitted at r0.)
+    cd pistomp-recovery
+    local desc
+    if desc=$(git describe --tags --abbrev=7 2>/dev/null); then
+        echo "$desc" | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    else
+        # The repo carries no tags, so git describe finds nothing. Synthesize the
+        # off-tag format from the base ${pkgver} plus commit count + short hash.
+        echo "${pkgver}.r$(git rev-list --count HEAD).g$(git rev-parse --short=7 HEAD)"
+    fi
+}
 
 build() {
     cd pistomp-recovery
@@ -48,8 +64,4 @@ package() {
     # Install the venv. -a preserves the relocatable symlinks/permissions.
     install -d "${pkgdir}/opt/pistomp/venvs/pistomp-recovery"
     cp -a "${srcdir}/venv/." "${pkgdir}/opt/pistomp/venvs/pistomp-recovery/"
-
-    # Install service file
-    install -Dm644 files/pistomp-recovery.service \
-        "${pkgdir}/usr/lib/systemd/system/pistomp-recovery.service"
 }

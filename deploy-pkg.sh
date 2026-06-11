@@ -27,6 +27,10 @@ DEVICE="${PISTOMP_HOST:-pistomp.local}"
 DEVICE_USER="${PISTOMP_USER:-pistomp}"
 REMOTE_TMP="/tmp/deploy-pkg"
 
+# Source config.sh so repo/branch vars are available when building from git on-device.
+# (Local-source deploys ignore these because PISTOMP_DEPLOY bypasses git.)
+[[ -f "${SCRIPT_DIR}/config.sh" ]] && source "${SCRIPT_DIR}/config.sh"
+
 # Directory names that map to known packages
 declare -A REPO_PKG_MAP=(
     [pi-stomp]=pi-stomp
@@ -165,6 +169,19 @@ fi
 
 echo "==> Building ${PKG} on device (this may take a few minutes)..."
 
+# Write .env on device so PKGBUILD can read repo/branch configuration
+# (the single source of truth is config.sh on the host, forwarded here).
+ssh "${SSH_HOST}" "cat > ${REMOTE_TMP}/.env" <<EOF
+export PISTOMP_REPO='${PISTOMP_REPO:-}'
+export PISTOMP_BRANCH='${PISTOMP_BRANCH:-}'
+export MODUI_REPO='${MODUI_REPO:-}'
+export MODUI_BRANCH='${MODUI_BRANCH:-}'
+export MOD_HOST_REPO='${MOD_HOST_REPO:-}'
+export MOD_HOST_BRANCH='${MOD_HOST_BRANCH:-}'
+export RECOVERY_REPO='${RECOVERY_REPO:-}'
+export RECOVERY_BRANCH='${RECOVERY_BRANCH:-}'
+EOF
+
 ssh "${SSH_HOST}" bash -s <<REMOTE_SCRIPT
 set -e
 
@@ -183,7 +200,7 @@ sudo chown -R builduser:builduser ${REMOTE_TMP}
 # so no manual pacman -S step is needed. PISTOMP_DEPLOY (when set) tells the
 # PKGBUILD to build from the rsynced ./${PKG} tree instead of cloning git.
 echo "==> Running makepkg..."
-sudo -u builduser ${DEPLOY_ENV}makepkg -s --noconfirm
+sudo -u builduser ${DEPLOY_ENV}source ${REMOTE_TMP}/.env && makepkg -s --noconfirm
 
 PKGFILE=\$(ls *.pkg.tar.* 2>/dev/null | head -1)
 if [[ -z "\${PKGFILE}" ]]; then
