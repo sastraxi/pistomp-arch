@@ -1,0 +1,82 @@
+# Maintainer: Cam <cam@treefallsound.com>
+pkgname=mod-ui
+# pkgver is derived from the upstream tag/commit by pkgver() below.
+pkgver=0.99.8
+pkgrel=1
+pkgdesc="MOD Web UI (Tornado) for pi-Stomp, on bundled Python 3.11"
+arch=('aarch64')
+url="https://github.com/sastraxi/mod-ui"
+license=('AGPL-3.0-or-later')
+# Runs on the bundled 3.11 interpreter (ABI-isolated from system python).
+# libmod_utils.so links lilv/jack/alsa at runtime.
+depends=('pistomp-python311' 'lilv' 'jack2-pistomp' 'alsa-lib')
+# uv builds the venv; lilv/jack2-pistomp/alsa-lib provide the *.pc + headers for
+# `make -C utils`; base-devel is the C/C++ toolchain + pkgconf.
+makedepends=('uv' 'git' 'base-devel' 'pistomp-python311' 'lilv' 'jack2-pistomp' 'alsa-lib')
+
+_repo="https://github.com/sastraxi/mod-ui.git"
+_branch="feat/web-bpm-rebroadcast"
+_py="/opt/pistomp/python311/bin/python3.11"
+
+source=("mod-ui::git+${_repo}#branch=${_branch}")
+sha256sums=('SKIP')
+
+pkgver() {
+    # Derive from the nearest reachable tag on ${_branch}. Exactly on a tag ->
+    # the clean tag (v1.0.0 -> 1.0.0); off-tag -> v0.99.8-3531-g7c40353 ->
+    # 0.99.8.r3531.g7c40353. (No --long, so the .rN.ghash suffix is omitted at r0.)
+    cd mod-ui
+    git describe --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+build() {
+    cd mod-ui
+
+    # Relocatable venv on the bundled 3.11 interpreter.
+    uv venv --python "${_py}" --relocatable "${srcdir}/venv"
+    local pybin="${srcdir}/venv/bin/python"
+
+    # mod-ui's setup.py declares bogus dependency names (tornado4, pil, pycrypto),
+    # so install the real packages first, then install mod-ui with --no-deps.
+    uv pip install --python "${pybin}" \
+        tornado==4.3 pillow pystache pycryptodome aggdraw pyserial
+
+    # Patch tornado 4.3 for Python 3.11+ (collections.MutableMapping moved to
+    # collections.abc).
+    local tornado_dir
+    tornado_dir=$("${pybin}" -c "import tornado, os; print(os.path.dirname(tornado.__file__))")
+    sed -i 's/collections\.MutableMapping/collections.abc.MutableMapping/g' \
+        "${tornado_dir}/httputil.py"
+
+    # Build libmod_utils.so (native C library used by modtools/utils.py).
+    make -C utils clean
+    make -C utils
+
+    # Install mod-ui non-editable so the `mod`/`modtools` packages and the
+    # console-script (bin/mod-ui) land inside the relocatable venv (the imperative
+    # build used -e, which would dangle once the source tree moved). --no-deps
+    # skips the broken declared deps installed above.
+    uv pip install --python "${pybin}" --no-deps .
+
+    # setup.py's libmod_utils.so copy only runs under a legacy `setup.py install`;
+    # the PEP517 wheel build above skips it, so the .so is missing from the
+    # installed package. modtools/utils.py loads it from modtools/libmod_utils.so
+    # (its first candidate path), so drop it there by hand.
+    local purelib
+    purelib=$("${pybin}" -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
+    install -Dm755 utils/libmod_utils.so "${purelib}/modtools/libmod_utils.so"
+}
+
+package() {
+    cd mod-ui
+
+    # Install the venv (carries bin/mod-ui, referenced by mod-ui.service).
+    install -d "${pkgdir}/opt/pistomp/venvs/mod-ui"
+    cp -a "${srcdir}/venv/." "${pkgdir}/opt/pistomp/venvs/mod-ui/"
+
+    # mod-ui.service points MOD_HTML_DIR and MOD_DEFAULT_PEDALBOARD at the source
+    # tree, so ship those assets package-owned under /opt/pistomp/mod-ui.
+    install -d "${pkgdir}/opt/pistomp/mod-ui"
+    cp -a html "${pkgdir}/opt/pistomp/mod-ui/html"
+    cp -a default.pedalboard "${pkgdir}/opt/pistomp/mod-ui/default.pedalboard"
+}

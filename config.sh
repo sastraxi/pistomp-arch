@@ -15,17 +15,7 @@ KEYMAP="us"
 FIRST_USER="pistomp"
 FIRST_USER_PASS="pistomp"
 
-# Python (uv-managed prebuilt, for mod-ui/browsepy/touchosc2midi only;
-# pi-stomp uses system Python + --system-site-packages)
-PYTHON_VERSION="3.11.11"
-
 # Repos
-PISTOMP_REPO="https://github.com/sastraxi/pi-stomp.git"
-PISTOMP_BRANCH="release/patch"
-
-MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
-MODUI_BRANCH="fix/web-bpm-rebroadcast"
-
 PEDALBOARDS_REPO="https://github.com/TreeFallSound/pi-stomp-pedalboards.git"
 PEDALBOARDS_BRANCH="master"
 

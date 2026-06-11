@@ -78,6 +78,16 @@ build_pkg "lg"
 
 build_pkg "lcd-splash"
 
+# Bundled relocatable Python 3.11 for mod-ui. Built before mod-ui so its venv
+# can be created against /opt/pistomp/python311.
+build_pkg "pistomp-python311"
+
+# Application packages. pi-stomp builds a --system-site-packages venv on the
+# system python; mod-ui builds on the bundled 3.11. Both ship their venv + the
+# runtime-needed source assets under /opt/pistomp (see their PKGBUILDs).
+build_pkg "pi-stomp"
+build_pkg "mod-ui"
+
 build_pkg "pistomp-recovery"
 
 # allows capturing audio while JACK is running

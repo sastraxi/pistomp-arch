@@ -5,20 +5,16 @@ echo "==> 05-python: Python environments and applications"
 
 PISTOMP_DIR="/opt/pistomp"
 VENV_BASE="${PISTOMP_DIR}/venvs"
-PATCHES="/root/pistomp-arch/patches"
 UV_BIN="${PISTOMP_DIR}/bin/uv"
 
 mkdir -p "${VENV_BASE}"
 
-# ---------- Python 3.11 (prebuilt via uv, for mod-ui/browsepy/touchosc2midi) ----------
+# ---------- Python 3.11 (provided by the pistomp-python311 package) ----------
 
-UV_PYTHON_DIR="${PISTOMP_DIR}/python"
-export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_DIR}"
-
-echo "==> Installing Python ${PYTHON_VERSION} (prebuilt)..."
-"${UV_BIN}" python install "${PYTHON_VERSION}"
-
-PYTHON_BIN=$("${UV_BIN}" python find "${PYTHON_VERSION}")
+# mod-ui and pi-stomp are now pacman packages built in 04-native-pkgs.sh.
+# The bundled Python 3.11 they (and browsepy/touchosc2midi) need ships as the
+# pistomp-python311 package, installed at a fixed /opt path.
+PYTHON_BIN="/opt/pistomp/python311/bin/python3.11"
 
 # ---------- Python virtualenvs ----------
 
@@ -28,66 +24,9 @@ create_venv() {
     "${UV_BIN}" venv --python "${PYTHON_BIN}" "${VENV_BASE}/${name}"
 }
 
-# ------------------------------------------------------------------------------------
-# ---------- mod-ui ----------
-
-echo "==> Installing mod-ui..."
-create_venv "mod-ui"
-
-git clone --depth 1 -b "${MODUI_BRANCH}" "${MODUI_REPO}" /tmp/mod-ui
-
-# Apply patches
-if [[ -d "${PATCHES}/mod-ui" ]]; then
-    for patch in "${PATCHES}"/mod-ui/*.patch; do
-        [[ -f "$patch" ]] && git -C /tmp/mod-ui apply "$patch"
-    done
-fi
-
-# mod-ui's setup.py declares bogus dependency names (tornado4, pil, pycrypto)
-# Install the real packages first, then install mod-ui with --no-deps
-MODUI_PYTHON="${VENV_BASE}/mod-ui/bin/python"
-"${UV_BIN}" pip install --python "${MODUI_PYTHON}" \
-    tornado==4.3 pillow pystache pycryptodome aggdraw pyserial
-
-# Patch tornado 4.3 for Python 3.11+ (collections.MutableMapping moved to collections.abc)
-TORNADO_DIR=$("${MODUI_PYTHON}" -c "import tornado, os; print(os.path.dirname(tornado.__file__))")
-sed -i 's/collections\.MutableMapping/collections.abc.MutableMapping/g' "${TORNADO_DIR}/httputil.py"
-
-# Install mod-ui as editable, skip broken dependency resolution
-"${UV_BIN}" pip install --python "${MODUI_PYTHON}" \
-    --no-deps -e /tmp/mod-ui
-
-# Build libmod_utils.so (native C library used by modtools/utils.py)
-make -C /tmp/mod-ui/utils clean
-make -C /tmp/mod-ui/utils
-
-# Move source to permanent location and re-install
-mv /tmp/mod-ui "${PISTOMP_DIR}/mod-ui"
-"${UV_BIN}" pip install --python "${MODUI_PYTHON}" \
-    --no-deps -e "${PISTOMP_DIR}/mod-ui"
-
-# ------------------------------------------------------------------------------------
-# ---------- pi-stomp ----------
-
-echo "==> Installing pi-stomp..."
-# pi-stomp venv uses system Python to access system C extensions
-# (lilv, smbus, gpiod, lgpio)
-"${UV_BIN}" venv --python /usr/bin/python3 --system-site-packages "${VENV_BASE}/pi-stomp"
-
-git clone --depth 1 -b "${PISTOMP_BRANCH}" "${PISTOMP_REPO}" "/home/${FIRST_USER}/pi-stomp"
-
-# Pre-install ALSA state so alsa-restore loads correct mixer settings on first boot
-# (before firstboot.service runs). Without this, the IQAudio DAC doesn't clock and JACK times out.
-mkdir -p /var/lib/alsa
-cp "/home/${FIRST_USER}/pi-stomp/setup/audio/iqaudiocodec.state" /var/lib/alsa/asound.state
-
-# swig is needed to build lgpio from PyPI sdist (no cp314 wheel yet)
-pacman -S --noconfirm --needed swig
-
-# Install pi-stomp and its dependencies from its uv lockfile.
-UV_PROJECT_ENVIRONMENT="${VENV_BASE}/pi-stomp" \
-    "${UV_BIN}" sync --frozen --no-dev --extra hardware \
-    --project "/home/${FIRST_USER}/pi-stomp"
+# mod-ui and pi-stomp are now built as pacman packages (pkgbuilds/mod-ui,
+# pkgbuilds/pi-stomp) in 04-native-pkgs.sh, so they no longer install here.
+# The ~/pi-stomp symlink and the ALSA asound.state seeding live in 06-app-data.sh.
 
 # ------------------------------------------------------------------------------------
 # ---------- browsepy ----------

@@ -1,0 +1,66 @@
+# Maintainer: Cam <cam@treefallsound.com>
+pkgname=pi-stomp
+# pkgver is derived from the upstream tag/commit by pkgver() below.
+pkgver=3.0.0
+pkgrel=1
+pkgdesc="DIY high definition multi-effects stompbox platform (pi-Stomp main app)"
+arch=('aarch64')
+url="https://github.com/sastraxi/pi-stomp"
+license=('GPL-3.0-or-later')
+# The venv is built on the system (pacman) Python with --system-site-packages,
+# so anything imported but not in pi-stomp's uv.lock must be guaranteed here:
+#   python-lilv/lilv -> `import lilv` (modalapi/pedalboard.py)
+#   lg               -> lgpio Python bindings (hardware GPIO)
+# jack2-pistomp is the JACK server pi-stomp talks to at runtime.
+depends=('python' 'python-lilv' 'lilv' 'lg' 'jack2-pistomp')
+# uv builds the relocatable venv; swig builds lgpio from its PyPI sdist (no cp314
+# wheel yet); base-devel provides the C toolchain for the from-source ext builds.
+makedepends=('uv' 'git' 'swig' 'base-devel')
+
+_repo="https://github.com/sastraxi/pi-stomp.git"
+_branch="release/patch"
+
+source=("pi-stomp::git+${_repo}#branch=${_branch}")
+sha256sums=('SKIP')
+
+pkgver() {
+    # Derive from the nearest reachable tag on ${_branch}. Exactly on a tag ->
+    # the clean tag (v3.1.0 -> 3.1.0); off-tag -> v3.0.4-81-gb2405a6 ->
+    # 3.0.4.r81.gb2405a6. (No --long, so the .rN.ghash suffix is omitted at r0.)
+    cd pi-stomp
+    git describe --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+build() {
+    cd pi-stomp
+
+    # Relocatable so the venv keeps working once extracted to the device path.
+    # --system-site-packages exposes the pacman-provided C extensions
+    # (lilv, lgpio). --no-editable installs the project as a real wheel into
+    # site-packages rather than an editable .pth pointing at $srcdir (which would
+    # not exist on the device). The app is launched as a script from the shipped
+    # source tree (see below), so the wheel copy is harmless but keeps imports
+    # working regardless of cwd.
+    uv venv --python /usr/bin/python --system-site-packages --relocatable \
+        "${srcdir}/venv"
+    UV_PROJECT_ENVIRONMENT="${srcdir}/venv" \
+        uv sync --frozen --no-dev --no-editable --extra hardware
+}
+
+package() {
+    cd pi-stomp
+
+    # Install the venv. -a preserves the relocatable symlinks/permissions.
+    install -d "${pkgdir}/opt/pistomp/venvs/pi-stomp"
+    cp -a "${srcdir}/venv/." "${pkgdir}/opt/pistomp/venvs/pi-stomp/"
+
+    # pi-stomp runs as `python modalapistomp.py` and resolves its own source dir
+    # at runtime (modalapistomp.py: os.path.dirname(realpath(__file__))), so the
+    # source tree must ship. Install it package-owned to /opt/pistomp/pi-stomp.
+    # Exclude VCS/venv/cache cruft.
+    install -d "${pkgdir}/opt/pistomp/pi-stomp"
+    cp -a ./. "${pkgdir}/opt/pistomp/pi-stomp/"
+    rm -rf "${pkgdir}/opt/pistomp/pi-stomp/.git" \
+           "${pkgdir}/opt/pistomp/pi-stomp/.venv" \
+           "${pkgdir}/opt/pistomp/pi-stomp/__pycache__"
+}

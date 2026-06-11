@@ -6,25 +6,38 @@ pkgdesc="Package update and recovery service for pi-Stomp"
 arch=('aarch64')
 url="https://github.com/sastraxi/pistomp-recovery"
 license=('MIT')
-depends=('python' 'jack2-pistomp' 'lg')
-makedepends=('uv' 'git' 'swig')
+# pygame is a runtime dependency (the recovery UI renders into a pygame Surface
+# that is pushed to the SPI LCD). It is compiled from source against the system
+# SDL2 + freetype2 (no cp314 wheel exists), so those libs are also runtime deps.
+depends=('python' 'jack2-pistomp' 'lg' 'sdl2' 'freetype2')
+# base-devel: C toolchain + pkgconf for the pygame/lgpio source builds.
+# sdl2/freetype2: headers + *.pc files needed while compiling pygame.
+# swig: required to build the lgpio extension from its PyPI sdist.
+makedepends=('uv' 'git' 'swig' 'base-devel' 'sdl2' 'freetype2')
 source=("pistomp-recovery::git+${url}.git#branch=main")
 sha256sums=('SKIP')
 
 build() {
     cd pistomp-recovery
-    uv venv --python /usr/bin/python --system-site-packages "${srcdir}/venv"
-    UV_PROJECT_ENVIRONMENT="${srcdir}/venv" uv sync --frozen --no-dev --extra hardware
+
+    # Build a relocatable venv so it keeps working once extracted to the device
+    # path. --no-editable installs the project as a real wheel into site-packages
+    # (rather than an editable .pth pointing at $srcdir, which would not exist on
+    # the device and would break `python -m pistomp_recovery`).
+    uv venv --python /usr/bin/python --system-site-packages --relocatable \
+        "${srcdir}/venv"
+    UV_PROJECT_ENVIRONMENT="${srcdir}/venv" \
+        uv sync --frozen --no-dev --no-editable --extra hardware
 }
 
 package() {
     cd pistomp-recovery
 
-    # Install venv
+    # Install the venv. -a preserves the relocatable symlinks/permissions.
     install -d "${pkgdir}/opt/pistomp/venvs/pistomp-recovery"
-    cp -r "${srcdir}/venv/"* "${pkgdir}/opt/pistomp/venvs/pistomp-recovery/"
+    cp -a "${srcdir}/venv/." "${pkgdir}/opt/pistomp/venvs/pistomp-recovery/"
 
     # Install service file
-    install -Dm644 "${srcdir}/pistomp-recovery/files/pistomp-recovery.service" \
+    install -Dm644 files/pistomp-recovery.service \
         "${pkgdir}/usr/lib/systemd/system/pistomp-recovery.service"
 }
