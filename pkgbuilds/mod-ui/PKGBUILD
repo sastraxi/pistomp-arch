@@ -18,10 +18,22 @@ _repo="https://github.com/sastraxi/mod-ui.git"
 _branch="feat/web-bpm-rebroadcast"
 _py="/opt/pistomp/python311/bin/python3.11"
 
-source=("mod-ui::git+${_repo}#branch=${_branch}")
+# deploy-pkg.sh --source sets PISTOMP_DEPLOY=1 and rsyncs a local tree next to
+# this PKGBUILD as ./mod-ui (== $pkgname). In that mode build from the tree
+# instead of fetching git, and skip the git-describe pkgver (the tree has no
+# .git). Normal image builds leave PISTOMP_DEPLOY unset and fetch from git.
+if [[ -n "${PISTOMP_DEPLOY:-}" ]]; then
+    source=("$pkgname")
+else
+    source=("mod-ui::git+${_repo}#branch=${_branch}")
+fi
 sha256sums=('SKIP')
 
 pkgver() {
+    # Deploy mode (deploy-pkg.sh --source): the local tree has no .git, and
+    # PISTOMP_DEPLOY carries a throwaway 0.dev<timestamp> version that sorts
+    # under any real release so a later pacman -Syu replaces it.
+    [[ -n "${PISTOMP_DEPLOY:-}" ]] && { echo "${PISTOMP_DEPLOY}"; return; }
     # Derive from the nearest reachable tag on ${_branch}. Exactly on a tag ->
     # the clean tag (v1.0.0 -> 1.0.0); off-tag -> v0.99.8-3531-g7c40353 ->
     # 0.99.8.r3531.g7c40353. (No --long, so the .rN.ghash suffix is omitted at r0.)

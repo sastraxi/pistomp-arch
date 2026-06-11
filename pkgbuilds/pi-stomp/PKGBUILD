@@ -20,10 +20,22 @@ makedepends=('uv' 'git' 'swig' 'base-devel')
 _repo="https://github.com/sastraxi/pi-stomp.git"
 _branch="release/patch"
 
-source=("pi-stomp::git+${_repo}#branch=${_branch}")
+# deploy-pkg.sh --source sets PISTOMP_DEPLOY=1 and rsyncs a local tree next to
+# this PKGBUILD as ./pi-stomp (== $pkgname). In that mode build from the tree
+# instead of fetching git, and skip the git-describe pkgver (the tree has no
+# .git). Normal image builds leave PISTOMP_DEPLOY unset and fetch from git.
+if [[ -n "${PISTOMP_DEPLOY:-}" ]]; then
+    source=("$pkgname")
+else
+    source=("pi-stomp::git+${_repo}#branch=${_branch}")
+fi
 sha256sums=('SKIP')
 
 pkgver() {
+    # Deploy mode (deploy-pkg.sh --source): the local tree has no .git, and
+    # PISTOMP_DEPLOY carries a throwaway 0.dev<timestamp> version that sorts
+    # under any real release so a later pacman -Syu replaces it.
+    [[ -n "${PISTOMP_DEPLOY:-}" ]] && { echo "${PISTOMP_DEPLOY}"; return; }
     # Derive from the nearest reachable tag on ${_branch}. Exactly on a tag ->
     # the clean tag (v3.1.0 -> 3.1.0); off-tag -> v3.0.4-81-gb2405a6 ->
     # 3.0.4.r81.gb2405a6. (No --long, so the .rN.ghash suffix is omitted at r0.)
@@ -62,5 +74,6 @@ package() {
     cp -a ./. "${pkgdir}/opt/pistomp/pi-stomp/"
     rm -rf "${pkgdir}/opt/pistomp/pi-stomp/.git" \
            "${pkgdir}/opt/pistomp/pi-stomp/.venv" \
-           "${pkgdir}/opt/pistomp/pi-stomp/__pycache__"
+           "${pkgdir}/opt/pistomp/pi-stomp/__pycache__" \
+           "${pkgdir}/opt/pistomp/pi-stomp/tests"
 }

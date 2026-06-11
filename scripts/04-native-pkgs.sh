@@ -27,27 +27,44 @@ mkdir -p "${PKG_CACHE}"
 build_pkg() {
     local pkg="$1"
 
-    # Check cache: extract expected filename from PKGBUILD metadata
     local build_dir="/tmp/build-${pkg}"
     cp -r "${PKGBUILDS}/${pkg}" "${build_dir}"
-    local _pkgname _pkgver _pkgrel
+    chown -R builduser:builduser "${build_dir}"
+    pushd "${build_dir}" > /dev/null
+
+    local _pkgname _pkgver _pkgrel _has_pkgver
     _pkgname=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgname")
-    _pkgver=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgver")
     _pkgrel=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgrel")
+    # VCS packages compute pkgver() from the fetched checkout, so the static
+    # pkgver= in the PKGBUILD is just a placeholder. Detect the function and, if
+    # present, fetch sources + run pkgver() (makepkg -o rewrites the pkgver= line
+    # in this build copy) so the cache key matches the real built filename.
+    _has_pkgver=$(bash -c "source ${build_dir}/PKGBUILD && type -t pkgver" || true)
+    if [[ "${_has_pkgver}" == "function" ]]; then
+        echo "==> Resolving dynamic pkgver: ${pkg}..."
+        su builduser -c "makepkg -od --noconfirm"
+    fi
+    _pkgver=$(bash -c "source ${build_dir}/PKGBUILD && echo \$pkgver")
+
     local cached
     cached=$(compgen -G "${PKG_CACHE}/${_pkgname}-${_pkgver}-${_pkgrel}-*.pkg.tar.*" | head -1) || true
 
     if [[ -n "${cached}" ]]; then
         echo "==> Installing cached package: ${pkg} (${_pkgver}-${_pkgrel})"
         pacman -U --noconfirm "${cached}"
+        popd > /dev/null
         rm -rf "${build_dir}"
         return
     fi
 
-    echo "==> Building PKGBUILD: ${pkg}..."
-    chown -R builduser:builduser "${build_dir}"
-    pushd "${build_dir}" > /dev/null
-    su builduser -c "makepkg -s --noconfirm"
+    echo "==> Building PKGBUILD: ${pkg} (${_pkgver}-${_pkgrel})..."
+    # -e (noextract) reuses the checkout already fetched above for VCS packages;
+    # harmless for the rest since nothing was extracted yet.
+    if [[ "${_has_pkgver}" == "function" ]]; then
+        su builduser -c "makepkg -es --noconfirm"
+    else
+        su builduser -c "makepkg -s --noconfirm"
+    fi
     pacman -U --noconfirm "${build_dir}"/*.pkg.tar.*
     # Cache the built package for next time
     cp "${build_dir}"/*.pkg.tar.* "${PKG_CACHE}/"

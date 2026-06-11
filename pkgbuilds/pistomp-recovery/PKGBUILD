@@ -14,7 +14,19 @@ depends=('python' 'jack2-pistomp' 'lg' 'sdl2' 'freetype2')
 # sdl2/freetype2: headers + *.pc files needed while compiling pygame.
 # swig: required to build the lgpio extension from its PyPI sdist.
 makedepends=('uv' 'git' 'swig' 'base-devel' 'sdl2' 'freetype2')
-source=("pistomp-recovery::git+${url}.git#branch=main")
+# deploy-pkg.sh --source sets PISTOMP_DEPLOY=1 and rsyncs a local tree next to
+# this PKGBUILD as ./pistomp-recovery (== $pkgname). In that mode build from the
+# tree instead of fetching git. Normal image builds fetch from git.
+if [[ -n "${PISTOMP_DEPLOY:-}" ]]; then
+    source=("$pkgname")
+    # PISTOMP_DEPLOY carries a throwaway 0.dev<timestamp> version (from
+    # deploy-pkg.sh) that sorts under any real release, so a later pacman -Syu
+    # replaces it. Set directly here (no pkgver() function) to keep the
+    # image-build cache fast path.
+    pkgver="${PISTOMP_DEPLOY}"
+else
+    source=("pistomp-recovery::git+${url}.git#branch=main")
+fi
 sha256sums=('SKIP')
 
 build() {
