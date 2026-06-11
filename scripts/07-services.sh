@@ -13,7 +13,7 @@ SYSTEMD_DIR="/usr/lib/systemd/system"
 WANTS="/etc/systemd/system/multi-user.target.wants"
 mkdir -p "${WANTS}"
 
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash lcd-reboot lcd-shutdown; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp pistomp-recovery firstboot pistomp-lcd-splash lcd-reboot lcd-shutdown; do
     install -v -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
 done
 

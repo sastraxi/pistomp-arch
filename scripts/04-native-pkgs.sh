@@ -78,6 +78,8 @@ build_pkg "lg"
 
 build_pkg "lcd-splash"
 
+build_pkg "pistomp-recovery"
+
 # allows capturing audio while JACK is running
 build_pkg "jack_capture"
 
