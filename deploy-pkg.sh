@@ -200,7 +200,7 @@ sudo chown -R builduser:builduser ${REMOTE_TMP}
 # so no manual pacman -S step is needed. PISTOMP_DEPLOY (when set) tells the
 # PKGBUILD to build from the rsynced ./${PKG} tree instead of cloning git.
 echo "==> Running makepkg..."
-sudo -u builduser ${DEPLOY_ENV}source ${REMOTE_TMP}/.env && makepkg -s --noconfirm
+sudo -u builduser bash -c "source ${REMOTE_TMP}/.env && ${DEPLOY_ENV}makepkg -s --noconfirm"
 
 PKGFILE=\$(ls *.pkg.tar.* 2>/dev/null | head -1)
 if [[ -z "\${PKGFILE}" ]]; then
