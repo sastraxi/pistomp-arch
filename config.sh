@@ -24,7 +24,7 @@ PISTOMP_REPO="https://github.com/sastraxi/pi-stomp.git"
 PISTOMP_BRANCH="release/patch"
 
 MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
-MODUI_BRANCH="feat/web-bpm-rebroadcast"
+MODUI_BRANCH="fix/dont-crash-if-instance-dont-exist"
 
 MOD_HOST_REPO="https://github.com/sastraxi/mod-host.git"
 MOD_HOST_BRANCH="fix/effect-drain-midi"
