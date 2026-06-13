@@ -63,11 +63,27 @@ install -m 644 /root/pistomp-arch/files/cmdline.txt /boot/cmdline.txt
 
 # ---------- fstab ----------
 
-# Generate fstab entries for boot and root
+# Generate fstab entries for boot, root (RO), and data (RW)
+# Using tmpfs for logs and temp files to protect the SD card and allow RO root
 cat > /etc/fstab <<EOF
-# <file system>  <mount point>  <type>  <options>  <dump>  <pass>
-/dev/mmcblk0p1   /boot          vfat    defaults   0       0
-/dev/mmcblk0p2   /              ext4    defaults,noatime,commit=30,errors=remount-ro  0       1
+# <file system>  <mount point>  <type>  <options>                    <dump>  <pass>
+/dev/mmcblk0p1   /boot          vfat    defaults,noatime             0       2
+/dev/mmcblk0p2   /              ext4    ro,noatime                   0       1
+/dev/mmcblk0p3   /home/pistomp  ext4    defaults,noatime,commit=10   0       2
+tmpfs            /tmp           tmpfs   defaults,noatime,mode=1777   0       0
+tmpfs            /var/tmp       tmpfs   defaults,noatime,mode=1777   0       0
+tmpfs            /var/log       tmpfs   defaults,noatime,mode=0755   0       0
+EOF
+
+# ---------- persistent logging ----------
+
+# /var/log is tmpfs (for RO root), so the journal symlink must be recreated each
+# boot. tmpfiles.d runs after tmpfs mounts and before journald starts.
+mkdir -p /home/pistomp/.system-logs/journal
+chown -R 1000:1000 /home/pistomp/.system-logs
+
+cat > /etc/tmpfiles.d/journal-link.conf <<EOF
+L /var/log/journal - - - - /home/pistomp/.system-logs/journal
 EOF
 
 echo "==> 00-base: Done"
