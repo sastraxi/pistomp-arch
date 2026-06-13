@@ -5,6 +5,15 @@ set -euo pipefail
 # on-device with makepkg and installing the result. This is the pacman-era
 # equivalent of the old pi-stomp/deploy.sh "scp the files" workflow.
 #
+# After a successful build the script prints the remote path of the package
+# artifact so you can scp it back and add it to the pistomp-arch GitHub
+# Releases repo:
+#
+#   ./deploy-pkg.sh pi-stomp
+#   # (copy the printed scp command)
+#   cd repo && repo-add pistomp.db.tar.zst *.pkg.tar.zst
+#   gh release upload repo pistomp.db.tar.zst pistomp.db *.pkg.tar.zst --clobber
+#
 # Usage:
 #   ./deploy-pkg.sh pi-stomp                      # build from git (branch in PKGBUILD)
 #   ./deploy-pkg.sh ../pi-stomp                    # build from local source tree
@@ -185,7 +194,7 @@ EOF
 ssh "${SSH_HOST}" bash -s <<REMOTE_SCRIPT
 set -e
 
-# Ensure the unprivileged build user exists (08-cleanup.sh removes it from the
+# Ensure the unprivileged build user exists (09-cleanup.sh removes it from the
 # shipped image, so recreate it here). makepkg refuses to run as root.
 if ! id builduser &>/dev/null; then
     sudo useradd -m -s /bin/bash builduser
@@ -219,6 +228,22 @@ echo "==> Done! ${PKG} deployed to ${DEVICE}"
 if [[ -n "${LOCAL_SOURCE}" ]]; then
     echo "    (installed as ${DEPLOY_VER}; any real release supersedes it on the"
     echo "     next pacman -Syu. Rebuild from git — '$0 ${PKG}' — for a proper version.)"
+fi
+
+# ---------- print artifact location for manual repo extraction ----------
+
+REMOTE_PKGFILE=$(ssh "${SSH_HOST}" "ls ${REMOTE_TMP}/*.pkg.tar.* 2>/dev/null | head -1") || true
+if [[ -n "${REMOTE_PKGFILE}" ]]; then
+    FILENAME=$(basename "${REMOTE_PKGFILE}")
+    echo ""
+    echo "==> Package artifact: ${REMOTE_PKGFILE}"
+    echo "==> Fetch it back to add to the repo:"
+    echo "    scp ${SSH_HOST}:${REMOTE_PKGFILE} ./repo/${FILENAME}"
+    echo ""
+    echo "==> Or add to repo and upload to GitHub Releases:"
+    echo "    mkdir -p repo && scp ${SSH_HOST}:${REMOTE_PKGFILE} repo/"
+    echo "    cd repo && repo-add pistomp.db.tar.zst ${FILENAME}"
+    echo "    gh release upload repo pistomp.db.tar.zst pistomp.db ${FILENAME} --clobber"
 fi
 
 # ---------- restart the relevant service ----------

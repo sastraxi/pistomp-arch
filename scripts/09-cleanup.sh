@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 08-cleanup: Cleaning up"
+echo "==> 09-cleanup: Cleaning up"
 
 # ---------- remove build user ----------
 
@@ -118,5 +118,5 @@ dd if=/dev/zero of=/zero_fill bs=1M 2>/dev/null || true
 rm -f /zero_fill
 sync
 
-echo "==> 08-cleanup: Done"
+echo "==> 09-cleanup: Done"
 echo "==> Build complete!"

@@ -27,7 +27,8 @@ scripts/
   05-python.sh               # pyenv, Python venvs, pip installs
   06-app-data.sh             # Pedalboards, LV2 plugins, user files
   07-services.sh             # systemd units, firstboot, helper scripts
-  08-cleanup.sh              # Shrink image
+  08-recovery-init.sh        # Prepare recovery utils and factory settings
+  09-cleanup.sh              # Shrink image
 pkgbuilds/                   # Pacman packages for C components (mod-host, amidithru, etc.)
 files/                       # Static config files, systemd units, pacman configs, boot scripts
 patches/                     # Patches applied during build (mod-ui, etc.)
@@ -42,7 +43,7 @@ cache/                       # Downloaded LV2 plugins tarball (gitignored)
 
 2. **Isolated Python.** pyenv pins Python 3.11 at `/opt/pistomp/pyenv/`. Each app gets its own venv in `/opt/pistomp/venvs/<app>/`. System Python is untouched. Service files reference venv Python directly.
 
-3. **Scripts are sequential and idempotent.** `00-base.sh` → `08-cleanup.sh` run in order inside chroot. Each script should be safe to re-run (use `--needed`, check before creating, etc.).
+3. **Scripts are sequential and idempotent.** `00-base.sh` → `09-cleanup.sh` run in order inside chroot. Each script should be safe to re-run (use `--needed`, check before creating, etc.).
 
 4. **config.sh is the single source of truth** for versions, repo URLs, branches, and paths. Scripts read from environment variables — don't hardcode these values in scripts.
 
@@ -60,6 +61,7 @@ cache/                       # Downloaded LV2 plugins tarball (gitignored)
 - **Pre-built LV2 plugins** — downloaded as tarball, not compiled. `libfluidsynth2-compat` PKGBUILD provides .so.2 shim for Debian-built plugins.
 - **makepkg needs a non-root user** — scripts create/destroy a temporary `builduser` for PKGBUILD compilation.
 - **First-boot config** — users edit `/boot/pistomp.conf` (FAT32, mountable anywhere). `firstboot.service` applies it once and disables itself.
+- **Package updates via GitHub Releases** — Custom PKGBUILDs are published as a pacman repo (`pistomp.db.tar.zst` + `.pkg.tar.zst` assets) on the `pistomp-arch` GitHub Releases page under the fixed tag `repo`. Devices check this repo via `pacman -Syu` (see `files/pacman-alarm.conf`).
 
 ## Service dependency chain
 

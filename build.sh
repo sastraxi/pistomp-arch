@@ -165,7 +165,8 @@ run_in_chroot "scripts/04-native-pkgs.sh"
 run_in_chroot "scripts/05-python.sh"
 run_in_chroot "scripts/06-app-data.sh"
 run_in_chroot "scripts/07-services.sh"
-run_in_chroot "scripts/08-cleanup.sh"
+run_in_chroot "scripts/08-recovery-init.sh"
+run_in_chroot "scripts/09-cleanup.sh"
 
 # ---------- finalize ----------
 

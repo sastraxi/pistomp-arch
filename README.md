@@ -182,7 +182,7 @@ The build is two-stage: **host-side image setup** followed by **chroot configura
 
 1. **Image creation (host)** — `build.sh` creates a raw `.img` file, partitions it (FAT32 boot + ext4 root), attaches it as a loop device via `losetup`/`kpartx`, and mounts the partitions.
 2. **pacstrap (host)** — Installs a fresh Arch Linux ARM rootfs directly from ALARM mirrors into the mounted image. No pre-built tarball needed.
-3. **Chroot scripts (target)** — `arch-chroot` enters the rootfs and runs the numbered scripts (`00-base.sh` through `08-cleanup.sh`) sequentially. These configure the system as if running on the Pi itself.
+3. **Chroot scripts (target)** — `arch-chroot` enters the rootfs and runs the numbered scripts (`00-base.sh` through `09-cleanup.sh`) sequentially. These configure the system as if running on the Pi itself.
 4. **Finalize (host)** — Unmounts everything, detaches the loop device, and compresses the image with zstd.
 
 When running via `build-docker.sh`, the entire process happens inside a privileged Docker container (an aarch64 Arch Linux image with `arch-install-scripts`). The host only needs Docker.
@@ -197,7 +197,8 @@ When running via `build-docker.sh`, the entire process happens inside a privileg
 | `05-python.sh` | pyenv, Python venvs, pip installs |
 | `06-app-data.sh` | Pedalboards, LV2 plugins, user files |
 | `07-services.sh` | systemd units, firstboot, helper scripts |
-| `08-cleanup.sh` | Clear caches, remove build artifacts |
+| `08-recovery-init.sh` | Prepare recovery utils and factory settings |
+| `09-cleanup.sh` | Clear caches, remove build artifacts |
 
 ## Direct Build (Linux only)
 
