@@ -126,4 +126,9 @@ fi
 BASHRC
 fi
 
+# Shell-agnostic helper scripts
+for helper in ps-restart ps-stop ps-run ps-journal mod-restart mod-ui-journal mod-host-journal; do
+    install -Dm 755 "/root/pistomp-arch/files/${helper}" "/usr/local/bin/${helper}"
+done
+
 echo "==> 02-system: Done"
