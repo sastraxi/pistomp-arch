@@ -13,7 +13,7 @@ SYSTEMD_DIR="/usr/lib/systemd/system"
 WANTS="/etc/systemd/system/multi-user.target.wants"
 mkdir -p "${WANTS}"
 
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash lcd-reboot lcd-shutdown; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash lcd-reboot lcd-shutdown pistomp-ro-recovery; do
     install -v -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
 done
 
@@ -26,6 +26,10 @@ done
 SYSINIT_WANTS="/etc/systemd/system/sysinit.target.wants"
 mkdir -p "${SYSINIT_WANTS}"
 ln -sf "${SYSTEMD_DIR}/pistomp-lcd-splash.service" "${SYSINIT_WANTS}/"
+ln -sf "${SYSTEMD_DIR}/pistomp-ro-recovery.service" "${SYSINIT_WANTS}/"
+
+# Recovery helper
+install -m 755 "${FILES}/pistomp-ro-recovery" /usr/local/sbin/pistomp-ro-recovery
 
 # Reboot splash
 REBOOT_WANTS="/etc/systemd/system/reboot.target.wants"

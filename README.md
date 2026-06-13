@@ -199,6 +199,16 @@ When running via `build-docker.sh`, the entire process happens inside a privileg
 | `07-services.sh` | systemd units, firstboot, helper scripts |
 | `08-cleanup.sh` | Clear caches, remove build artifacts |
 
+## Filesystem Recovery
+
+If the root filesystem is detected as read-only at boot (for example, due to an unclean shutdown leaving the ext4 journal in a bad state), the `pistomp-ro-recovery.service` will automatically reboot to give `systemd-fsck` another chance to repair it. Up to 2 recovery attempts are made, with a persistent counter stored in `/boot` to prevent infinite reboot loops. If `/boot` itself is not writable, the script aborts and the device stays read-only for manual repair.
+
+To disable this behavior (for example during debugging), add `pistomp.ro.recovery=0` to the kernel command line in `cmdline.txt`:
+
+```text
+root=/dev/mmcblk0p2 ... pistomp.ro.recovery=0
+```
+
 ## Direct Build (Linux only)
 
 ```bash
