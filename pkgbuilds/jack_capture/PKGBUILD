@@ -1,0 +1,48 @@
+# Maintainer: pistomp
+# Adapted from AUR jack_capture: arch=aarch64, and patches applied with `git am`
+pkgname=jack_capture
+_tag=0.9.73
+pkgver=0.9.73post1
+pkgrel=1
+pkgdesc='Simple command line tool to record JACK audio output to a file'
+arch=('aarch64')
+url='https://github.com/kmatheussen/jack_capture'
+license=('GPL-2.0-or-later')
+groups=('pro-audio')
+depends=('glibc' 'jack')
+makedepends=('git' 'lame' 'liblo' 'libsndfile')
+optdepends=('meterbridge: levels monitor'
+            'bash: GUI wrapper'
+            'zenity: GUI wrapper')
+source=("${pkgname}::git+https://github.com/kmatheussen/jack_capture.git#tag=${_tag}"
+        'jack_capture-post-release-fixes.patch'
+        'jack_capture-file-rotation.patch')
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+prepare() {
+    cd "${srcdir}/${pkgname}"
+    # git am needs a committer identity; the build user has none.
+    git config user.email 'build@pistomp.local'
+    git config user.name 'pistomp build'
+    git am "${srcdir}/jack_capture-post-release-fixes.patch"
+    git am "${srcdir}/jack_capture-file-rotation.patch"
+    # Drop MacPorts-only paths (don't exist on Linux).
+    sed -i 's| -I/opt/local/include||g; s| -L/opt/local/lib||g' Makefile
+}
+
+build() {
+    cd "${srcdir}/${pkgname}"
+    make
+}
+
+package() {
+    depends+=('libjack.so' 'liblo.so' 'libmp3lame.so' 'libsndfile.so')
+    cd "${srcdir}/${pkgname}"
+    make PREFIX='/usr' DESTDIR="${pkgdir}" install
+    # GUI wrapper
+    install -vDm755 "${pkgname}_gui" "${pkgdir}/usr/bin/${pkgname}_gui"
+    # Documentation
+    install -vDm644 README -t "${pkgdir}/usr/share/doc/${pkgname}"
+}

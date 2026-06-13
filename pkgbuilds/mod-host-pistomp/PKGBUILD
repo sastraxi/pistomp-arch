@@ -1,7 +1,7 @@
 # Maintainer: pistomp
 pkgname=mod-host-pistomp
 pkgver=0.10.6
-pkgrel=1
+pkgrel=2
 pkgdesc="LV2 host for MOD devices (pi-stomp build)"
 arch=('aarch64')
 url="https://github.com/mod-audio/mod-host"
@@ -10,7 +10,11 @@ depends=('jack2' 'lilv' 'fftw' 'liblo' 'readline')
 makedepends=('git' 'hylia')
 provides=('mod-host' 'lv2-host')
 conflicts=('mod-host')
-source=("git+https://github.com/mod-audio/mod-host.git")
+
+_repo="https://github.com/sastraxi/mod-host.git"
+_branch="fix/effect-drain-midi"
+
+source=("mod-host::git+${_repo}#branch=${_branch}")
 sha256sums=('SKIP')
 
 build() {

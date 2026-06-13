@@ -25,7 +25,13 @@ if [[ -f "${CONF}" ]]; then
         nmcli connection add type wifi ifname wlan0 con-name "preconfigured" \
             ssid "${WIFI_SSID}" \
             wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PASSWORD}" \
+            ipv4.route-metric 700 ipv6.route-metric 700 \
             connection.autoconnect yes || true
+    fi
+
+    # Direct-cable IP on ethernet (link-local, non-routable per RFC 3927)
+    if [[ -n "${DIRECT_IP:-}" ]]; then
+        nmcli connection modify wired-end0 ipv4.addresses "${DIRECT_IP}/16" || true
     fi
 
     # Hostname
@@ -86,14 +92,6 @@ if [[ -f /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state ]]; then
     cp /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state /var/lib/alsa/asound.state
 fi
 
-# JACK audio configuration
-mkdir -p /etc/default
-cat > /etc/default/jack <<EOF
-# JACK audio settings (configured from /boot/pistomp.conf)
-JACK_SAMPLE_RATE="${JACK_SAMPLE_RATE:-48000}"
-JACK_PERIOD="${JACK_PERIOD:-256}"
-EOF
-
 # Fix ownership
 chown -R pistomp:pistomp /home/pistomp/
 
@@ -103,6 +101,13 @@ if grep -q 'Pi 3' /proc/cpuinfo 2>/dev/null; then
 else
     runuser -u pistomp -- /home/pistomp/pi-stomp/util/modify_version.sh 3.0
 fi
+
+# JACK audio configuration
+cat > /etc/default/jack <<EOF
+# JACK audio settings (configured from /boot/pistomp.conf)
+JACK_SAMPLE_RATE="${JACK_SAMPLE_RATE:-48000}"
+JACK_PERIOD="${JACK_PERIOD:-256}"
+EOF
 
 # Pi 5 EEPROM update
 if grep -q 'Pi 5' /proc/cpuinfo 2>/dev/null; then

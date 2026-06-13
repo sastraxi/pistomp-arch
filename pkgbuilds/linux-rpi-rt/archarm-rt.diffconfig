@@ -58,11 +58,10 @@ CONFIG_COMPACTION=y
 CONFIG_FUTEX=y
 CONFIG_FUTEX_PI=y
 
-# CGroup support for RT scheduling
+# CGroup support
 CONFIG_CGROUPS=y
 CONFIG_CGROUP_SCHED=y
 CONFIG_FAIR_GROUP_SCHED=y
-CONFIG_RT_GROUP_SCHED=y
 
-# RT throttling - allow unlimited RT time for audio
-CONFIG_RT_GROUP_SCHED=y
+# Do not carve up RT between cgroups; all services co-operate
+# CONFIG_RT_GROUP_SCHED is not set

@@ -61,6 +61,7 @@ docker run --name "${CONTAINER_NAME}" --privileged \
         set -euo pipefail
 
         # Install build dependencies
+        pacman -Syu --noconfirm
         pacman -S --needed --noconfirm base-devel bc kmod inetutils xmlto docbook-xsl git patch
 
         # Create builduser (required for makepkg)

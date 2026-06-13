@@ -56,18 +56,26 @@ find /usr/share/locale -mindepth 1 -maxdepth 1 -type d ! -name 'en_US' ! -name '
 # ---------- prune firmware blobs (keep only RPi WiFi/BT) ----------
 
 echo "==> Pruning firmware blobs..."
-if [[ -d /usr/lib/firmware ]]; then
-    cd /usr/lib/firmware
-    for dir in */; do
-        dir="${dir%/}"
-        case "$dir" in
-            brcm|cypress) continue ;;
+# firmware-raspberrypi ships blobs under updates/ too, so we must preserve both the
+# top-level brcm/cypress dirs and the updates/ tree to keep wifi functional
+prune_firmware_dir() {
+    local base="$1"
+    [[ -d "$base" ]] || return 0
+    local dir
+    for dir in "$base"/*/; do
+        [[ -d "$dir" ]] || continue
+        case "$(basename "$dir")" in
+            brcm|cypress|updates) continue ;;
             *) rm -rf "$dir" ;;
         esac
     done
-    # Remove non-RPi firmware files at top level (keep regulatory DB)
-    find /usr/lib/firmware -maxdepth 1 -type f ! -name 'regulatory*' -delete
-    cd /
+    # Remove loose files at this level (keep regulatory DB if present)
+    find "$base" -maxdepth 1 -type f ! -name 'regulatory*' -delete
+}
+
+if [[ -d /usr/lib/firmware ]]; then
+    prune_firmware_dir /usr/lib/firmware/updates
+    prune_firmware_dir /usr/lib/firmware
 fi
 
 # ---------- prune kernel modules ----------

@@ -10,6 +10,7 @@ services:
     privileged: true
     environment:
       - BUILD_TIMESTAMP
+      - BUILD_TAG
     volumes:
       - .:/build
     depends_on:

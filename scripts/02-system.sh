@@ -77,6 +77,40 @@ dns=dnsmasq
 unmanaged-devices=none
 EOF
 
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/wifi-powersave.conf <<EOF
+[connection]
+wifi.powersaving = 2
+EOF
+
+# Wired connection: always assign a link-local 169.254.x.y address on end0
+# in parallel with any DHCP attempt. Lets a laptop reach the device over a
+# direct cable (no DHCP server) for recovery when wifi is down.
+install -d -m 700 /etc/NetworkManager/system-connections
+cat > /etc/NetworkManager/system-connections/wired-end0.nmconnection <<EOF
+[connection]
+id=wired-end0
+type=ethernet
+interface-name=end0
+autoconnect=true
+
+[ipv4]
+method=auto
+link-local=3
+route-metric=100
+
+[ipv6]
+method=link-local
+EOF
+chmod 600 /etc/NetworkManager/system-connections/wired-end0.nmconnection
+
+# loosen the kernel's reverse-path filter so it doesn't drop packets
+# if both wifi and ethernet are active and they come back on an unexpected path
+cat > /etc/sysctl.d/99-rp-filter.conf <<EOF
+net.ipv4.conf.all.rp_filter = 2
+net.ipv4.conf.default.rp_filter = 2
+EOF
+
 # ---------- bash aliases ----------
 
 install -m 644 /root/pistomp-arch/files/bash_aliases "/home/${FIRST_USER}/.bash_aliases"

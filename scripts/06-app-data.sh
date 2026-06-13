@@ -59,6 +59,14 @@ else
     echo '{"bank": -2, "pedalboard": "", "supportsDividers": true}' > "${LAST_JSON}"
 fi
 
+# ---------- osbuild metadata ----------
+
+echo "==> Writing .osbuild metadata..."
+SOFTWARE_VERSION=$(git -C "/home/${FIRST_USER}/pi-stomp" describe --tags --always 2>/dev/null || echo "unknown")
+printf '{"build-tag": "%s", "build-date": "%s", "software-version": "%s"}\n' \
+    "${BUILD_TAG:-unknown}" "${BUILD_DATE:-000000}" "${SOFTWARE_VERSION}" \
+    > "/home/${FIRST_USER}/.osbuild"
+
 # ---------- fix ownership ----------
 
 chown -R "${FIRST_USER}:${FIRST_USER}" "/home/${FIRST_USER}"

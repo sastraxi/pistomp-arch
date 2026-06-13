@@ -37,6 +37,9 @@ POWEROFF_WANTS="/etc/systemd/system/poweroff.target.wants"
 mkdir -p "${POWEROFF_WANTS}"
 ln -sf "${SYSTEMD_DIR}/lcd-shutdown.service" "${POWEROFF_WANTS}/"
 
+# Late shutdown hook — runs after filesystems are unmounted, shows "Safe to power off"
+install -Dm755 "${FILES}/lcd-safe-poweroff.sh" /usr/lib/systemd/system-shutdown/lcd-safe-poweroff.sh
+
 # Services installed but NOT enabled by default
 for svc in ttymidi mod-midi-merger mod-midi-merger-broadcaster wifi-hotspot mod-touchosc2midi; do
     if [[ -f "${FILES}/${svc}.service" ]]; then
@@ -78,6 +81,19 @@ done
 # wifi-check: falls back to hotspot if WiFi is not connected at boot
 install -v -m 644 "${FILES}/wifi-check.service" "${SYSTEMD_DIR}/"
 ln -sf "${SYSTEMD_DIR}/wifi-check.service" "${WANTS}/"
+
+# ---------- JackBridge pi-side service ----------
+#
+# Installs pi-stomp-jackbridge.service + its helper scripts under /usr/local.
+# Not enabled — the LCD UI starts/stops it on demand. See JackRouter pi/README
+# (or pi-stomp's JACKBRIDGE_RECORDING.md) for the integration contract.
+
+echo "==> Installing JackBridge pi-side service (${JACKROUTER_REF})..."
+JACKROUTER_SRC=/tmp/jackrouter
+rm -rf "${JACKROUTER_SRC}"
+git clone --depth 1 -b "${JACKROUTER_REF}" "${JACKROUTER_REPO}" "${JACKROUTER_SRC}"
+bash "${JACKROUTER_SRC}/pi/install.sh"
+rm -rf "${JACKROUTER_SRC}"
 
 # ---------- MOTD (pistomp logo) ----------
 

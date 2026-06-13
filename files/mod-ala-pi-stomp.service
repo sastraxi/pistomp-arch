@@ -5,12 +5,15 @@ After=jack.service mod-host.service mod-ui.service
 
 [Service]
 User=pistomp
+Environment="JACK_PROMISCUOUS_SERVER=jack"
 WorkingDirectory=/home/pistomp
 ExecStartPre=-/usr/bin/lcd-splash /usr/share/pistomp/splash.rgb565 "Loading pedalboard"
 ExecStart=/opt/pistomp/venvs/pi-stomp/bin/python /home/pistomp/pi-stomp/modalapistomp.py
 TimeoutStopSec=5
 Restart=always
 RestartSec=5
+LimitMEMLOCK=infinity
+LimitRTPRIO=64
 
 [Install]
 WantedBy=multi-user.target

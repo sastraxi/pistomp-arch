@@ -42,6 +42,7 @@ run_in_chroot() {
     arch-chroot "${ROOT_MNT}" /bin/bash -c "
         set -a
         source /root/pistomp-arch/config.sh
+        source /root/pistomp-arch/build-meta.sh
         set +a
         /root/current-script.sh
     "
@@ -112,8 +113,13 @@ DATA_PART="/dev/mapper/${LOOP_NAME}p3"
 # Format
 log "Formatting partitions..."
 mkfs.vfat -F 32 -n PISTOMP "${BOOT_PART}"
-mkfs.ext4 -F -L rootfs -O "^huge_file,^64bit" "${ROOT_PART}"
-mkfs.ext4 -F -L data -O "^huge_file,^64bit" "${DATA_PART}"
+ROOT_FEATURES="^huge_file"
+if grep -q "64bit" /etc/mke2fs.conf 2>/dev/null; then
+    ROOT_FEATURES="^64bit,${ROOT_FEATURES}"
+fi
+mkfs.ext4 -F -L rootfs -O "${ROOT_FEATURES}" "${ROOT_PART}"
+mkfs.ext4 -F -L data -O "${ROOT_FEATURES}" "${DATA_PART}"
+tune2fs -e remount-ro "${ROOT_PART}"
 
 # Mount
 log "Mounting partitions..."
@@ -149,6 +155,12 @@ cp -r "${SCRIPT_DIR}/files" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/pkgbuilds" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/patches" "${ROOT_MNT}/root/pistomp-arch/"
 cp -r "${SCRIPT_DIR}/extras" "${ROOT_MNT}/root/pistomp-arch/"
+
+# Calculate build metadata (software version, build tag/date)
+BUILD_TAG="${BUILD_TAG:-$(git -C "${SCRIPT_DIR}" describe --tags --always --dirty 2>/dev/null || echo "unknown")}"
+BUILD_DATE=$(date +"%y%m%d")
+printf 'BUILD_TAG="%s"\nBUILD_DATE="%s"\n' "${BUILD_TAG}" "${BUILD_DATE}" > "${ROOT_MNT}/root/pistomp-arch/build-meta.sh"
+
 # Bind-mount cache to avoid copying large tarballs
 mkdir -p "${ROOT_MNT}/root/pistomp-arch/cache"
 mount --bind "${SCRIPT_DIR}/cache" "${ROOT_MNT}/root/pistomp-arch/cache"
@@ -172,6 +184,9 @@ install -m 644 "${SCRIPT_DIR}/files/pacman-alarm.conf" "${ROOT_MNT}/etc/pacman.c
 
 log "Unmounting..."
 cleanup
+
+log "Checking filesystem..."
+e2fsck -f -y "${ROOT_PART}" || true
 
 # Compress minimally (see recompress-img.sh for distribution)
 TIMESTAMP="${BUILD_TIMESTAMP:-$(date +%Y-%m-%d)}"

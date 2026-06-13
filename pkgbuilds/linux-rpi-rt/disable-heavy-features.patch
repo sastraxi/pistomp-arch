@@ -1,6 +1,6 @@
 --- PKGBUILD	2026-02-16 10:00:00
 +++ PKGBUILD	2026-02-16 10:05:00
-@@ -81,6 +81,38 @@
+@@ -81,4 +81,39 @@
    # Show RT status
    echo "RT Preemption status:"
    grep "CONFIG_PREEMPT" .config | grep -v "^#" || echo "  (no PREEMPT config found)"
@@ -40,5 +40,3 @@
 +
 +  make olddefconfig
  }
-
- build() {
