@@ -24,7 +24,7 @@ PISTOMP_REPO="https://github.com/sastraxi/pi-stomp.git"
 PISTOMP_BRANCH="release/patch"
 
 MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
-MODUI_BRANCH="fix/web-bpm-rebroadcast"
+MODUI_BRANCH="fix/dont-crash-if-instance-dont-exist"
 
 PEDALBOARDS_REPO="https://github.com/TreeFallSound/pi-stomp-pedalboards.git"
 PEDALBOARDS_BRANCH="master"
