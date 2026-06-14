@@ -126,6 +126,12 @@ EOF
 install -Dm 755 /root/pistomp-arch/files/nm-dispatcher-multihome \
     /etc/NetworkManager/dispatcher.d/90-multihome
 
+# Enable the dispatcher service. It is D-Bus activated via the alias
+# dbus-org.freedesktop.nm-dispatcher.service; without that symlink NM's
+# activation fails with "unknown unit" and dispatcher scripts never run.
+ln -sf /usr/lib/systemd/system/NetworkManager-dispatcher.service \
+    /etc/systemd/system/dbus-org.freedesktop.nm-dispatcher.service
+
 # ---------- bash aliases ----------
 
 install -m 644 /root/pistomp-arch/files/bash_aliases "/home/${FIRST_USER}/.bash_aliases"
