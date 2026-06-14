@@ -62,6 +62,7 @@ install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
 
 # ---------- helper scripts ----------
 
+ln -sf "/home/${FIRST_USER}/pi-stomp/util/record_lcd.py" /usr/local/bin/ps-record-lcd
 install -m 755 "${FILES}/wait-for-jack.sh" /usr/local/bin/wait-for-jack.sh
 install -m 755 "${FILES}/wait-for-mod-host.sh" /usr/local/bin/wait-for-mod-host.sh
 mkdir -p /usr/share/pistomp
