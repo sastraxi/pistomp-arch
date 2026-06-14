@@ -26,11 +26,6 @@ if [[ -f "${CONF}" ]]; then
             connection.autoconnect yes || true
     fi
 
-    # Direct-cable IP on ethernet (link-local, non-routable per RFC 3927)
-    if [[ -n "${DIRECT_IP:-}" ]]; then
-        nmcli connection modify wired-end0 ipv4.addresses "${DIRECT_IP}/16" || true
-    fi
-
     # Hostname
     if [[ -n "${HOSTNAME:-}" && "${HOSTNAME}" != "pistomp" ]]; then
         hostnamectl set-hostname "${HOSTNAME}"
