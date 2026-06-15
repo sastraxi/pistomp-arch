@@ -16,6 +16,8 @@ if [[ -f "${CONF}" ]]; then
 
     # WiFi — create the connection profile so NM connects automatically
     lcd "Configuring WiFi..."
+    printf 'options cfg80211 ieee80211_regdom=%s\n' "${WIFI_COUNTRY:-US}" \
+        > /etc/modprobe.d/cfg80211.conf
     iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
     if [[ -n "${WIFI_SSID:-}" ]]; then
         nmcli connection delete "preconfigured" 2>/dev/null || true

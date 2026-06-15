@@ -20,6 +20,7 @@ pacman -S --noconfirm --needed \
     dnsmasq \
     hostapd \
     iw \
+    wireless-regdb \
     parted \
     dosfstools \
     cloud-guest-utils \
