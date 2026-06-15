@@ -16,6 +16,8 @@ if [[ -f "${CONF}" ]]; then
 
     # WiFi — create the connection profile so NM connects automatically
     lcd "Configuring WiFi..."
+    printf 'options cfg80211 ieee80211_regdom=%s\n' "${WIFI_COUNTRY:-US}" \
+        > /etc/modprobe.d/cfg80211.conf
     iw reg set "${WIFI_COUNTRY:-US}" 2>/dev/null || true
     if [[ -n "${WIFI_SSID:-}" ]]; then
         nmcli connection delete "preconfigured" 2>/dev/null || true
@@ -24,11 +26,6 @@ if [[ -f "${CONF}" ]]; then
             wifi-sec.key-mgmt wpa-psk wifi-sec.psk "${WIFI_PASSWORD}" \
             ipv4.route-metric 700 ipv6.route-metric 700 \
             connection.autoconnect yes || true
-    fi
-
-    # Direct-cable IP on ethernet (link-local, non-routable per RFC 3927)
-    if [[ -n "${DIRECT_IP:-}" ]]; then
-        nmcli connection modify wired-end0 ipv4.addresses "${DIRECT_IP}/16" || true
     fi
 
     # Hostname

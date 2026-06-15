@@ -12,7 +12,7 @@ rm -f /etc/sudoers.d/builduser
 
 echo "==> Removing build and orphaned dependencies..."
 # Build tools
-for pkg in base-devel bc kmod inetutils xmlto docbook-xsl ffmpeg swig; do
+for pkg in base-devel bc kmod inetutils xmlto docbook-xsl swig; do
     pacman -Rns --noconfirm "$pkg" 2>/dev/null || true
 done
 # tk/X11 chain — not needed on headless device

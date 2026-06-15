@@ -67,6 +67,26 @@ On first boot, `firstboot.service` runs automatically and:
 
 After the reboot, the full service chain starts: JACK → mod-host → mod-ui → pi-stomp. The web UI is available on port 80.
 
+## Networking
+
+The device is reachable as **`pistomp.local`** (mDNS/avahi) over any of three paths, with no fixed IP required:
+
+| Path | How it works |
+|------|--------------|
+| **WiFi** | `wlan0` joins your network via DHCP (configured in `pistomp.conf`). |
+| **Ethernet on a LAN** | `end0` plugged into a router; gets DHCP. |
+| **Ethernet direct cable** | `end0` straight to a computer, no DHCP. `end0` self-assigns a link-local `169.254.x` address and `pistomp.local` resolves over the cable. Used for [JackRouter](https://github.com/sastraxi/JackRouter) audio streaming (netJACK2 finds the Pi by multicast, so no fixed IP is needed). |
+
+A few details worth knowing:
+
+- **No fixed IP for direct cable.** `end0` is configured `link-local=fallback` — it does DHCP normally and only falls back to a link-local address when no DHCP server answers. This keeps a LAN clean (one address per interface) while still allowing direct-cable access.
+- **WiFi power save is disabled** (`wifi.powersave = 2`) for reliable, low-latency reachability.
+- **WiFi + ethernet at the same time both work.** When `end0` and `wlan0` are on the *same* subnet (e.g. both plugged into your router), a naive setup makes the lower-metric interface steal the route, leaving the other interface's IP unreachable for inbound connections — i.e. WiFi appears to go dark the moment you plug in ethernet. This is solved by source-based **policy routing**: the `90-multihome` NetworkManager dispatcher gives each interface its own routing table so replies egress the interface the request arrived on. Strong-host ARP (`arp_ignore=1`, `arp_announce=2`) prevents ARP flux.
+
+If no WiFi network is configured or reachable at boot, the device falls back to a **hotspot** (SSID `pistomp`, password `pistompwifi`) via `wifi-check.service`.
+
+**Direct-cable tip:** plugging in a direct cable can take up to ~30–60s to become reachable — `end0` itself assigns its link-local in ~1–2s, but the *computer* side (especially USB ethernet adapters) is often slow to give up DHCP and self-assign its own `169.254.x` address. Setting the computer's ethernet interface to "Link-Local only" speeds this up.
+
 ## Working with a Running Device
 
 ### Updating app code without re-flashing
@@ -199,6 +219,16 @@ When running via `build-docker.sh`, the entire process happens inside a privileg
 | `07-services.sh` | systemd units, firstboot, helper scripts |
 | `08-recovery-init.sh` | Prepare recovery utils and factory settings |
 | `09-cleanup.sh` | Clear caches, remove build artifacts |
+
+## Filesystem Recovery
+
+If the root filesystem is detected as read-only at boot (for example, due to an unclean shutdown leaving the ext4 journal in a bad state), the `pistomp-ro-recovery.service` will automatically reboot to give `systemd-fsck` another chance to repair it. Up to 2 recovery attempts are made, with a persistent counter stored in `/boot` to prevent infinite reboot loops. If `/boot` itself is not writable, the script aborts and the device stays read-only for manual repair.
+
+To disable this behavior (for example during debugging), add `pistomp.ro.recovery=0` to the kernel command line in `cmdline.txt`:
+
+```text
+root=/dev/mmcblk0p2 ... pistomp.ro.recovery=0
+```
 
 ## Direct Build (Linux only)
 

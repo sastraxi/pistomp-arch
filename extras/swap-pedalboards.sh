@@ -40,7 +40,7 @@ echo "==> Swapping pedalboard repo -> $NEW_REMOTE ($BRANCH)"
 if [ -d "$PB_DIR/.git" ]; then
   git -C "$PB_DIR" remote set-url origin "$NEW_REMOTE"
   git -C "$PB_DIR" fetch origin "$BRANCH"
-  git -C "$PB_DIR" reset --hard "origin/$BRANCH"
+  git -C "$PB_DIR" reset --hard FETCH_HEAD
   git -C "$PB_DIR" clean -fdx          # drop boards not in the new tree
 else
   rm -rf "$PB_DIR"

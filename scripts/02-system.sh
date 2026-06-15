@@ -20,6 +20,7 @@ pacman -S --noconfirm --needed \
     dnsmasq \
     hostapd \
     iw \
+    wireless-regdb \
     parted \
     dosfstools \
     cloud-guest-utils \
@@ -80,12 +81,24 @@ EOF
 mkdir -p /etc/NetworkManager/conf.d
 cat > /etc/NetworkManager/conf.d/wifi-powersave.conf <<EOF
 [connection]
-wifi.powersaving = 2
+wifi.powersave = 2
 EOF
 
-# Wired connection: always assign a link-local 169.254.x.y address on end0
-# in parallel with any DHCP attempt. Lets a laptop reach the device over a
-# direct cable (no DHCP server) for recovery when wifi is down.
+# Disable scan MAC randomization: NM randomizes the MAC during wifi scans by
+# default, then resets to the hardware MAC on connect. Some routers track
+# device identity across the scan→associate transition and get confused by the
+# flip, causing them to stop forwarding frames to the interface.
+cat > /etc/NetworkManager/conf.d/wifi-no-scan-rand.conf <<EOF
+[device]
+wifi.scan-rand-mac-address=no
+EOF
+
+# Wired connection: DHCP on a LAN, link-local (169.254.x) only as a fallback
+# when no DHCP server answers (direct cable). link-local=4 is fallback, not
+# parallel — a parallel link-local would leak an extra 169.254 A record into
+# avahi on a LAN and poison pistomp.local resolution. dhcp-timeout shortens
+# the wait before the direct-cable fallback kicks in. No fixed IP: netJACK2
+# finds the Pi by multicast and pistomp.local resolves over link-local mDNS.
 install -d -m 700 /etc/NetworkManager/system-connections
 cat > /etc/NetworkManager/system-connections/wired-end0.nmconnection <<EOF
 [connection]
@@ -96,20 +109,38 @@ autoconnect=true
 
 [ipv4]
 method=auto
-link-local=3
+link-local=4
 route-metric=100
+dhcp-timeout=15
 
 [ipv6]
 method=link-local
 EOF
 chmod 600 /etc/NetworkManager/system-connections/wired-end0.nmconnection
 
-# loosen the kernel's reverse-path filter so it doesn't drop packets
-# if both wifi and ethernet are active and they come back on an unexpected path
-cat > /etc/sysctl.d/99-rp-filter.conf <<EOF
+# Multi-homed host (end0 + wlan0 can be up on the same subnet): loosen the
+# reverse-path filter so asymmetric paths aren't dropped, and use strong-host
+# ARP so each NIC only answers/announces for its own address (no ARP flux).
+cat > /etc/sysctl.d/99-multihome.conf <<EOF
 net.ipv4.conf.all.rp_filter = 2
 net.ipv4.conf.default.rp_filter = 2
+net.ipv4.conf.all.arp_ignore = 1
+net.ipv4.conf.default.arp_ignore = 1
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.conf.default.arp_announce = 2
 EOF
+
+# Source-based policy routing so end0 and wlan0 are each reachable for inbound
+# connections when both share a subnet (otherwise the lower-metric NIC steals
+# the route and the other's IP goes dark). See the dispatcher for details.
+install -Dm 755 /root/pistomp-arch/files/nm-dispatcher-multihome \
+    /etc/NetworkManager/dispatcher.d/90-multihome
+
+# Enable the dispatcher service. It is D-Bus activated via the alias
+# dbus-org.freedesktop.nm-dispatcher.service; without that symlink NM's
+# activation fails with "unknown unit" and dispatcher scripts never run.
+ln -sf /usr/lib/systemd/system/NetworkManager-dispatcher.service \
+    /etc/systemd/system/dbus-org.freedesktop.nm-dispatcher.service
 
 # ---------- bash aliases ----------
 
@@ -125,5 +156,10 @@ if [ -f ~/.bash_aliases ]; then
 fi
 BASHRC
 fi
+
+# Shell-agnostic helper scripts
+for helper in ps-restart ps-stop ps-run ps-journal mod-restart mod-ui-journal mod-host-journal; do
+    install -Dm 755 "/root/pistomp-arch/files/${helper}" "/usr/local/bin/${helper}"
+done
 
 echo "==> 02-system: Done"
