@@ -16,8 +16,8 @@ IFACE="$1"
 ACTION="$2"
 
 case "$IFACE" in
-    end0)  TABLE=100 ;;
-    wlan0) TABLE=200 ;;
+    end0)  TABLE=100; OTHER=wlan0 ;;
+    wlan0) TABLE=200; OTHER=end0  ;;
     *)     exit 0 ;;
 esac
 
@@ -25,6 +25,15 @@ flush_rules() {
     while ip rule show | grep -q "lookup $TABLE"; do
         ip rule del table "$TABLE" 2>/dev/null || break
     done
+}
+
+gratuitous_arp() {
+    # Reannounce the surviving interface's IP so neighbours flush stale ARP entries
+    # pointing our IP at the interface that just went down.
+    local OTHER_ADDR
+    OTHER_ADDR=$(ip -4 -o addr show dev "$OTHER" scope global | awk '{print $4; exit}')
+    OTHER_ADDR=${OTHER_ADDR%/*}
+    [ -n "$OTHER_ADDR" ] && arping -A -I "$OTHER" -c 3 -q "$OTHER_ADDR" &
 }
 
 case "$ACTION" in
@@ -51,6 +60,7 @@ case "$ACTION" in
         flush_rules
         ip route flush table "$TABLE" 2>/dev/null
         ip route flush cache
+        gratuitous_arp
         ;;
 esac
 exit 0
