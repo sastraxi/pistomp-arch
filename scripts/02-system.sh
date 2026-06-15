@@ -84,6 +84,15 @@ cat > /etc/NetworkManager/conf.d/wifi-powersave.conf <<EOF
 wifi.powersave = 2
 EOF
 
+# Disable scan MAC randomization: NM randomizes the MAC during wifi scans by
+# default, then resets to the hardware MAC on connect. Some routers track
+# device identity across the scan→associate transition and get confused by the
+# flip, causing them to stop forwarding frames to the interface.
+cat > /etc/NetworkManager/conf.d/wifi-no-scan-rand.conf <<EOF
+[device]
+wifi.scan-rand-mac-address=no
+EOF
+
 # Wired connection: DHCP on a LAN, link-local (169.254.x) only as a fallback
 # when no DHCP server answers (direct cable). link-local=4 is fallback, not
 # parallel — a parallel link-local would leak an extra 169.254 A record into
