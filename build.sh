@@ -88,8 +88,9 @@ if [[ -f "${IMG_FILE}" ]]; then
     done
     rm -f "${IMG_FILE}"
 fi
-umount -lf "${ROOT_MNT}" 2>/dev/null || true
-umount -lf "${BOOT_MNT}" 2>/dev/null || true
+umount "${ROOT_MNT}" 2>/dev/null || true
+umount "${BOOT_MNT}" 2>/dev/null || true
+sync
 mkdir -p "${ROOT_MNT}" "${BOOT_MNT}"
 
 # Create image file
