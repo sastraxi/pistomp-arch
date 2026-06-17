@@ -9,8 +9,8 @@ source "${SCRIPT_DIR}/config.sh"
 log()  { echo "==> $*"; }
 die()  { echo "ERROR: $*" >&2; exit 1; }
 
-cleanup() {
-    log "Cleaning up..."
+unmount_all() {
+    log "Unmounting partitions..."
     sync
     # arch-chroot leaves behind /proc, /sys, /dev, /run mounts inside the
     # rootfs. umount -R (recursive) handles all submounts in the correct
@@ -29,8 +29,21 @@ cleanup() {
     fi
     mountpoint -q "${BOOT_MNT}" 2>/dev/null && umount "${BOOT_MNT}" || true
     sync
-    [[ -n "${LOOP_DEV:-}" ]] && kpartx -dv "${LOOP_DEV}" 2>/dev/null || true
-    [[ -n "${LOOP_DEV:-}" ]] && losetup -d "${LOOP_DEV}" 2>/dev/null || true
+}
+
+detach_loop() {
+    if [[ -n "${LOOP_DEV:-}" ]]; then
+        log "Detaching loop device..."
+        kpartx -dv "${LOOP_DEV}" 2>/dev/null || true
+        losetup -d "${LOOP_DEV}" 2>/dev/null || true
+        unset LOOP_DEV
+    fi
+}
+
+cleanup() {
+    log "Cleaning up..."
+    unmount_all
+    detach_loop
 }
 trap cleanup EXIT
 
@@ -78,8 +91,9 @@ if [[ -f "${IMG_FILE}" ]]; then
     done
     rm -f "${IMG_FILE}"
 fi
-umount -lf "${ROOT_MNT}" 2>/dev/null || true
-umount -lf "${BOOT_MNT}" 2>/dev/null || true
+umount "${ROOT_MNT}" 2>/dev/null || true
+umount "${BOOT_MNT}" 2>/dev/null || true
+sync
 mkdir -p "${ROOT_MNT}" "${BOOT_MNT}"
 
 # Create image file
@@ -187,6 +201,8 @@ cleanup
 
 log "Checking filesystem..."
 e2fsck -f -y "${ROOT_PART}" || true
+
+detach_loop
 
 # Compress minimally (see recompress-img.sh for distribution)
 TIMESTAMP="${BUILD_TIMESTAMP:-$(date +%Y-%m-%d)}"

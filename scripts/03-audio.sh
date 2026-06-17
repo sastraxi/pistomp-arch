@@ -13,7 +13,8 @@ pacman -S --noconfirm --needed \
     libsamplerate \
     libsndfile \
     fftw \
-    liblo
+    liblo \
+    ffmpeg
 
 # ---------- realtime audio config ----------
 
