@@ -66,12 +66,13 @@ cache/                       # Downloaded LV2 plugins tarball (gitignored)
 ## Service dependency chain
 
 ```
-jack.service
-  ├─ mod-host.service
-  │    ├─ mod-ui.service
-  │    │    └─ mod-ala-pi-stomp.service
-  │    └─ browsepy.service
-  └─ mod-amidithru.service
+zram.service
+  └─ jack.service
+       ├─ mod-host.service
+       │    ├─ mod-ui.service
+       │    │    └─ mod-ala-pi-stomp.service
+       │    └─ browsepy.service
+       └─ mod-amidithru.service
 ```
 
 ## Troubleshooting with the live device
