@@ -84,13 +84,18 @@ cat > /etc/NetworkManager/conf.d/wifi-powersave.conf <<EOF
 wifi.powersave = 2
 EOF
 
-# Disable scan MAC randomization: NM randomizes the MAC during wifi scans by
-# default, then resets to the hardware MAC on connect. Some routers track
-# device identity across the scan→associate transition and get confused by the
-# flip, causing them to stop forwarding frames to the interface.
-cat > /etc/NetworkManager/conf.d/wifi-no-scan-rand.conf <<EOF
+# WiFi MAC behavior: on an appliance, availability beats MAC randomization
+# privacy. Some routers track device identity across scan→associate and get
+# confused when NM flips from a randomized scan MAC back to the hardware MAC,
+# so disable scan-time randomization. Also default every new WiFi profile to
+# the hardware MAC rather than a per-network stable random MAC, which keeps
+# router ACLs, captive portals, and parental controls happy.
+cat > /etc/NetworkManager/conf.d/wifi-mac.conf <<EOF
 [device]
 wifi.scan-rand-mac-address=no
+
+[connection]
+802-11-wireless.cloned-mac-address=preserve
 EOF
 
 # Wired connection: DHCP on a LAN, link-local (169.254.x) only as a fallback
