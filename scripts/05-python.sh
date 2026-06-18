@@ -79,7 +79,7 @@ git clone --depth 1 -b "${PISTOMP_BRANCH}" "${PISTOMP_REPO}" "/home/${FIRST_USER
 # Pre-install ALSA state so alsa-restore loads correct mixer settings on first boot
 # (before firstboot.service runs). Without this, the IQAudio DAC doesn't clock and JACK times out.
 mkdir -p /var/lib/alsa
-cp "/home/${FIRST_USER}/pi-stomp/setup/audio/iqaudiocodec.state" /var/lib/alsa/asound.state
+cp "/root/pistomp-arch/files/iqaudiocodec.state" /var/lib/alsa/asound.state
 
 # swig is needed to build lgpio from PyPI sdist (no cp314 wheel yet)
 pacman -S --noconfirm --needed swig
