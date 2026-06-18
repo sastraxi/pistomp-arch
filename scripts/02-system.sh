@@ -162,6 +162,13 @@ fi
 BASHRC
 fi
 
+# ---------- journald ----------
+
+# Cap persistent journal size
+install -Dm 644 /root/pistomp-arch/files/journald-pistomp.conf /etc/systemd/journald.conf.d/pistomp.conf
+
+# ---------- helper scripts ----------
+
 # Shell-agnostic helper scripts
 for helper in ps-restart ps-stop ps-run ps-journal mod-restart mod-ui-journal mod-host-journal; do
     install -Dm 755 "/root/pistomp-arch/files/${helper}" "/usr/local/bin/${helper}"
