@@ -21,7 +21,7 @@ PYTHON_VERSION="3.11.11"
 
 # Repos
 PISTOMP_REPO="https://github.com/sastraxi/pi-stomp.git"
-PISTOMP_BRANCH="release/patch"
+PISTOMP_BRANCH="main"
 
 MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
 MODUI_BRANCH="more-fixes"
