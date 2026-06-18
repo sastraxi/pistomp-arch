@@ -18,7 +18,7 @@ depends=('python' 'python-lilv' 'lilv' 'lg' 'jack2-pistomp')
 makedepends=('uv' 'git' 'swig' 'base-devel')
 
 _repo="${PISTOMP_REPO:-https://github.com/sastraxi/pi-stomp.git}"
-_branch="${PISTOMP_BRANCH:-release/patch}"
+_branch="${PISTOMP_BRANCH:-main}"
 
 # deploy-pkg.sh --source sets PISTOMP_DEPLOY=1 and rsyncs a local tree next to
 # this PKGBUILD as ./pi-stomp (== $pkgname). In that mode build from the tree
