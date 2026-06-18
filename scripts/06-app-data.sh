@@ -16,9 +16,9 @@ ln -sfn "${PISTOMP_DIR}/pi-stomp" "/home/${FIRST_USER}/pi-stomp"
 
 # Pre-install ALSA state so alsa-restore loads correct mixer settings on first
 # boot (before firstboot.service runs). Without this, the IQAudio DAC doesn't
-# clock and JACK times out. Source the state from the packaged pi-stomp tree.
+# clock and JACK times out.
 mkdir -p /var/lib/alsa
-cp "${PISTOMP_DIR}/pi-stomp/setup/audio/iqaudiocodec.state" /var/lib/alsa/asound.state
+cp "/root/pistomp-arch/files/iqaudiocodec.state" /var/lib/alsa/asound.state
 
 # ---------- application data ----------
 
