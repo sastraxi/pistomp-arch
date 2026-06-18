@@ -83,12 +83,6 @@ fi
 
 # ---------- hardware setup ----------
 
-lcd "Configuring audio..."
-# Copy audio card settings (IQAudio DAC+)
-if [[ -f /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state ]]; then
-    cp /home/pistomp/pi-stomp/setup/audio/iqaudiocodec.state /var/lib/alsa/asound.state
-fi
-
 # Fix ownership
 chown -R pistomp:pistomp /home/pistomp/
 
