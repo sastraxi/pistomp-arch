@@ -50,6 +50,9 @@ install -m 644 /root/pistomp-arch/files/sysctl.d/90-audio.conf /etc/sysctl.d/90-
 
 # ---------- rtirq service ----------
 
+# Install custom rtirq.conf (removes i8042, uses "snd" wildcard for all Pi gens)
+install -m 644 /root/pistomp-arch/files/rtirq.conf /etc/rtirq.conf
+
 # Enable rtirq for RT kernel (no-op on non-RT kernels)
 ln -sf /usr/lib/systemd/system/rtirq.service /etc/systemd/system/multi-user.target.wants/rtirq.service
 

@@ -13,12 +13,12 @@ SYSTEMD_DIR="/usr/lib/systemd/system"
 WANTS="/etc/systemd/system/multi-user.target.wants"
 mkdir -p "${WANTS}"
 
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash lcd-reboot lcd-shutdown pistomp-ro-recovery; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot pistomp-lcd-splash lcd-reboot lcd-shutdown pistomp-ro-recovery zram; do
     install -v -m 644 "${FILES}/${svc}.service" "${SYSTEMD_DIR}/"
 done
 
 # Services enabled by default
-for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot; do
+for svc in jack mod-host mod-ui browsepy mod-amidithru mod-ala-pi-stomp firstboot zram; do
     ln -sf "${SYSTEMD_DIR}/${svc}.service" "${WANTS}/"
 done
 
@@ -53,12 +53,17 @@ done
 
 # Verify service files are in place
 echo "==> Verifying service files in ${SYSTEMD_DIR}:"
-ls -la "${SYSTEMD_DIR}"/{jack,mod-host,mod-ui,browsepy,mod-amidithru,mod-ala-pi-stomp,firstboot}.service
+ls -la "${SYSTEMD_DIR}"/{jack,mod-host,mod-ui,browsepy,mod-amidithru,mod-ala-pi-stomp,firstboot,zram}.service
 
 # ---------- firstboot script ----------
 
 install -m 755 "${FILES}/firstboot.sh" /boot/firstboot.sh
 install -m 644 "${FILES}/pistomp.conf" /boot/pistomp.conf
+
+# ---------- zram scripts ----------
+
+install -m 755 "${FILES}/zram-start.sh" /usr/local/sbin/zram-start.sh
+install -m 755 "${FILES}/zram-stop.sh" /usr/local/sbin/zram-stop.sh
 
 # ---------- helper scripts ----------
 
