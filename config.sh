@@ -26,6 +26,12 @@ PISTOMP_BRANCH="main"
 MODUI_REPO="https://github.com/sastraxi/mod-ui.git"
 MODUI_BRANCH="more-fixes"
 
+MOD_HOST_REPO="https://github.com/sastraxi/mod-host.git"
+MOD_HOST_BRANCH="fix/effect-drain-midi"
+
+RECOVERY_REPO="https://github.com/sastraxi/pistomp-recovery.git"
+RECOVERY_BRANCH="main"
+
 PEDALBOARDS_REPO="https://github.com/TreeFallSound/pi-stomp-pedalboards.git"
 PEDALBOARDS_BRANCH="master"
 

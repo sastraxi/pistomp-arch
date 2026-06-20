@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "==> 08-cleanup: Cleaning up"
+echo "==> 09-cleanup: Cleaning up"
 
 # ---------- remove build user ----------
 
@@ -32,7 +32,8 @@ pacman -Scc --noconfirm
 # ---------- install production pacman.conf ----------
 
 install -m 644 /root/pistomp-arch/files/pacman-alarm.conf /etc/pacman.conf
-pacman -Sy
+# FIXME: do the first github release to avoid this hack
+pacman -Sy --noconfirm || true
 
 # ---------- clear temporary files ----------
 
@@ -118,5 +119,5 @@ dd if=/dev/zero of=/zero_fill bs=1M 2>/dev/null || true
 rm -f /zero_fill
 sync
 
-echo "==> 08-cleanup: Done"
+echo "==> 09-cleanup: Done"
 echo "==> Build complete!"

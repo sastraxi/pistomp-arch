@@ -6,6 +6,20 @@ echo "==> 06-app-data: Application data and plugins"
 PISTOMP_DIR="/opt/pistomp"
 FILES="/root/pistomp-arch/files"
 
+# ---------- pi-stomp compatibility symlink + ALSA state ----------
+
+# pi-stomp now ships package-owned at /opt/pistomp/pi-stomp. Provide the
+# historical ~/pi-stomp path (used by modify_version.sh and other tools) via a
+# symlink. It lives under /home (not pacman-owned), so it survives package
+# updates that only touch /opt.
+ln -sfn "${PISTOMP_DIR}/pi-stomp" "/home/${FIRST_USER}/pi-stomp"
+
+# Pre-install ALSA state so alsa-restore loads correct mixer settings on first
+# boot (before firstboot.service runs). Without this, the IQAudio DAC doesn't
+# clock and JACK times out.
+mkdir -p /var/lib/alsa
+cp "/root/pistomp-arch/files/iqaudiocodec.state" /var/lib/alsa/asound.state
+
 # ---------- application data ----------
 
 echo "==> Installing application data..."
@@ -18,7 +32,7 @@ git clone --depth 1 -b "${PEDALBOARDS_BRANCH}" "${PEDALBOARDS_REPO}" \
 ln -sf "/home/${FIRST_USER}/data/.pedalboards" "/home/${FIRST_USER}/.pedalboards"
 
 # User files
-git clone --depth 1 -b "${USERFILES_BRANCH}" "${USERFILES_REPO}" \
+git clone --depth 1 --recurse-submodules -b "${USERFILES_BRANCH}" "${USERFILES_REPO}" \
     "/home/${FIRST_USER}/data/user-files"
 
 # Extras folder (utility scripts for pistomp user)
@@ -62,7 +76,10 @@ fi
 # ---------- osbuild metadata ----------
 
 echo "==> Writing .osbuild metadata..."
-SOFTWARE_VERSION=$(git -C "/home/${FIRST_USER}/pi-stomp" describe --tags --always 2>/dev/null || echo "unknown")
+# pi-stomp is a pacman package now and its shipped tree has no .git, so read the
+# version from pacman rather than `git describe`.
+SOFTWARE_VERSION=$(pacman -Q pi-stomp 2>/dev/null | awk '{print $2}' || echo "unknown")
+[[ -n "${SOFTWARE_VERSION}" ]] || SOFTWARE_VERSION="unknown"
 printf '{"build-tag": "%s", "build-date": "%s", "software-version": "%s"}\n' \
     "${BUILD_TAG:-unknown}" "${BUILD_DATE:-000000}" "${SOFTWARE_VERSION}" \
     > "/home/${FIRST_USER}/.osbuild"

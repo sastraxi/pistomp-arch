@@ -1,0 +1,35 @@
+# Maintainer: Cam <cam@treefallsound.com>
+pkgname=pistomp-python311
+pkgver=3.11.11
+pkgrel=1
+pkgdesc="Relocatable Python 3.11 (uv python-build-standalone) for mod-ui and other 3.11-only consumers"
+arch=('aarch64')
+url="https://github.com/astral-sh/python-build-standalone"
+license=('PSF-2.0')
+# Standalone CPython is largely self-contained but dynamically links glibc and a
+# few base libs that are always present on the device.
+depends=('glibc')
+makedepends=('uv')
+
+# python-build-standalone interpreters are relocatable, so we stage one at build
+# time and ship it at a fixed /opt path. mod-ui's venv is created against
+# /opt/pistomp/python311/bin/python3.11. Kept ABI-isolated from the system
+# (pacman) python so a system python bump never touches the mod-ui (tornado 4.3)
+# stack.
+_install_prefix="/opt/pistomp/python311"
+
+build() {
+    # Install the prebuilt interpreter into a srcdir-local cache.
+    export UV_PYTHON_INSTALL_DIR="${srcdir}/python"
+    uv python install "${pkgver}"
+}
+
+package() {
+    install -d "${pkgdir}${_install_prefix}"
+    # uv stores the interpreter under a versioned dir
+    # (e.g. cpython-3.11.11-linux-aarch64-gnu/). Copy its contents to the fixed
+    # prefix. -a preserves the relocatable symlinks and permissions.
+    local pydir
+    pydir=$(compgen -G "${srcdir}/python/cpython-${pkgver}-"* | head -1)
+    cp -a "${pydir}/." "${pkgdir}${_install_prefix}/"
+}
