@@ -32,7 +32,7 @@ git clone --depth 1 -b "${PEDALBOARDS_BRANCH}" "${PEDALBOARDS_REPO}" \
 ln -sf "/home/${FIRST_USER}/data/.pedalboards" "/home/${FIRST_USER}/.pedalboards"
 
 # User files
-git clone --depth 1 -b "${USERFILES_BRANCH}" "${USERFILES_REPO}" \
+git clone --depth 1 --recurse-submodules -b "${USERFILES_BRANCH}" "${USERFILES_REPO}" \
     "/home/${FIRST_USER}/data/user-files"
 
 # Extras folder (utility scripts for pistomp user)
