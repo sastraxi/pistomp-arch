@@ -69,6 +69,13 @@ done
 
 [[ -f "${SCRIPT_DIR}/cache/lv2plugins.tar.gz" ]] || die "LV2 plugins not found. Run: mkdir -p cache && curl -L -o cache/lv2plugins.tar.gz ${LV2_PLUGINS_URL}"
 
+if [[ ! -f "${SCRIPT_DIR}/cache/T3K-sweep-v3.wav" ]]; then
+    log "Downloading NAM reamp signal to cache/T3K-sweep-v3.wav..."
+    mkdir -p "${SCRIPT_DIR}/cache"
+    curl -L --fail -o "${SCRIPT_DIR}/cache/T3K-sweep-v3.wav" "${NAM_REAMP_URL}" \
+        || die "Failed to download NAM reamp WAV from ${NAM_REAMP_URL}"
+fi
+
 # ---------- image setup ----------
 
 WORK_DIR="${SCRIPT_DIR}/work"

@@ -51,6 +51,14 @@ echo "==> Installing LV2 plugins from cache..."
 tar xzf "${LV2_CACHE}" -C "/home/${FIRST_USER}/" --exclude='._*' --warning=no-unknown-keyword
 ln -sf "/home/${FIRST_USER}/.lv2" "/home/${FIRST_USER}/data/.lv2"
 
+# NAM reamp signal — pre-downloaded in cache/ by build.sh
+NAM_CACHE="/root/pistomp-arch/cache/T3K-sweep-v3.wav"
+echo "==> Installing NAM reamp signal..."
+[[ -f "${NAM_CACHE}" ]] || { echo "ERROR: NAM reamp signal not found at ${NAM_CACHE}." >&2; exit 1; }
+NAM_DEST="${PISTOMP_DIR}/pi-stomp/setup/nam"
+mkdir -p "${NAM_DEST}"
+cp "${NAM_CACHE}" "${NAM_DEST}/T3K-sweep-v3.wav"
+
 # ---------- last.json generation ----------
 
 echo "==> Generating last.json..."
