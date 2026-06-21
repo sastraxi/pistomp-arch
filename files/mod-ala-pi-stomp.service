@@ -16,7 +16,7 @@ RestartSec=5
 StartLimitBurst=3
 StartLimitIntervalSec=180
 LimitMEMLOCK=infinity
-LimitRTPRIO=64
+LimitRTPRIO=70
 
 [Install]
 WantedBy=multi-user.target
