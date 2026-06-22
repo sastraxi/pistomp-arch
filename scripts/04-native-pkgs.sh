@@ -123,6 +123,6 @@ build_pkg "mod-ui"
 build_pkg "pistomp-recovery"
 
 # allows capturing audio while JACK is running
-build_pkg "jack_capture"
+build_pkg "jack-capture"
 
 echo "==> 04-native-pkgs: Done"

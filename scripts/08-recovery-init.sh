@@ -41,7 +41,7 @@ mkdir -p "$(dirname "${FACTORY_PKGS}")"
     first=true
     for pkg in jack2-pistomp mod-host-pistomp mod-midi-merger mod-ttymidi \
                amidithru fluidsynth-headless libfluidsynth2-compat lg \
-               lcd-splash sfizz-pistomp jack_capture hylia pi-stomp \
+               lcd-splash sfizz-pistomp jack-capture hylia pi-stomp \
                mod-ui pistomp-recovery; do
         ver=$(pacman -Q "${pkg}" 2>/dev/null | awk '{print $2}' || echo "not-installed")
         if [[ "${first}" == "true" ]]; then

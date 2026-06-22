@@ -22,7 +22,7 @@ All native C components and Python apps are built as pacman packages (PKGBUILDs)
 | `mod-midi-merger` | MIDI merger broadcaster |
 | `mod-ttymidi` | ttymidi bridge |
 | `hylia` | Audio utilities |
-| `jack_capture` | JACK audio capture |
+| `jack-capture` | JACK audio capture |
 | `pistomp-python311` | Bundled Python 3.11 for mod-ui |
 
 Devices check for updates from the `[pistomp]` repo (configured in `/etc/pacman.conf`):
